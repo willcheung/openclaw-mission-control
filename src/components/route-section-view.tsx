@@ -114,6 +114,10 @@ const DoctorView = dynamic(
   () => import("@/components/doctor-view").then((m) => m.DoctorView),
   { loading: () => <SectionLoading /> }
 );
+const HelpView = dynamic(
+  () => import("@/components/help-view").then((m) => m.HelpView),
+  { loading: () => <SectionLoading /> }
+);
 
 export type DashboardSection =
   | "dashboard"
@@ -143,7 +147,8 @@ export type DashboardSection =
   | "search"
   | "settings"
   | "hooks"
-  | "doctor";
+  | "doctor"
+  | "help";
 
 function SectionContent({ section }: { section: DashboardSection }) {
   switch (section) {
@@ -201,6 +206,8 @@ function SectionContent({ section }: { section: DashboardSection }) {
       return <HooksView />;
     case "doctor":
       return <DoctorView />;
+    case "help":
+      return <HelpView />;
     default:
       return <DashboardView />;
   }

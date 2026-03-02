@@ -15,8 +15,8 @@ const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_APP_VERSION: git("describe --tags --always") || "dev",
     NEXT_PUBLIC_COMMIT_HASH: git("rev-parse --short HEAD") || "unknown",
-    AGENTBAY_HOSTING: "false",
-    NEXT_PUBLIC_AGENTBAY_HOSTING: "false",
+    AGENTBAY_HOSTED: "false",
+    NEXT_PUBLIC_AGENTBAY_HOSTED: "false",
   },
   // Ensure modules resolve from project root (avoids HOME being used as context)
   webpack: (config, { dir }) => {

@@ -45,6 +45,7 @@ import {
   Settings2,
   Webhook,
   Stethoscope,
+  HelpCircle,
 } from "lucide-react";
 import { getChatUnreadCount, subscribeChatStore } from "@/lib/chat-store";
 import {
@@ -64,7 +65,7 @@ type NavItem = {
   group?: string;
 };
 
-const isAgentbayHosting = process.env.NEXT_PUBLIC_AGENTBAY_HOSTING === "true";
+const isAgentbayHosting = process.env.NEXT_PUBLIC_AGENTBAY_HOSTED === "true";
 
 const navItems: NavItem[] = [
   // ── Core ──
@@ -96,6 +97,7 @@ const navItems: NavItem[] = [
   ...(!isAgentbayHosting ? [{ section: "tailscale", label: "Tailscale", icon: Waypoints, href: "/tailscale" } as NavItem] : []),
   { section: "settings", label: "Settings", icon: Settings2, href: "/settings" },
   { section: "config", label: "Config", icon: Settings, href: "/config" },
+  ...(isAgentbayHosting ? [{ section: "help" as const, label: "Help & support", icon: HelpCircle, href: "/help" } as NavItem] : []),
   // ── Monitoring ──
   { group: "Monitoring", section: "doctor", label: "Doctor", icon: Stethoscope, href: "/doctor" },
   { section: "usage", label: "Usage", icon: BarChart3, href: "/usage" },
@@ -145,6 +147,7 @@ function deriveSectionFromPath(pathname: string): string | null {
     "logs",
     "config",
     "settings",
+    "help",
   ]);
   return known.has(first) ? first : null;
 }
