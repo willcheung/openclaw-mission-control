@@ -56,6 +56,11 @@ type Agent = {
   lastActive: number | null;
 };
 
+type ChatBootstrapResponse = {
+  agents?: Agent[];
+  models?: Array<{ key?: string; name?: string }>;
+};
+
 /* ── Agent display helpers ──────────────────────── */
 
 /** Show a friendly display name: use agent name, but if it's just the raw ID, show model instead */
@@ -1298,18 +1303,27 @@ export function ChatView({ isVisible = true }: { isVisible?: boolean }) {
     new Set(["main"])
   );
 
-  // Fetch agents on mount (auto-discovery)
-  const agentsLoadedRef = useRef(false);
-  const fetchAgents = useCallback(() => {
+  // Fetch chat bootstrap data on mount (gateway config + sessions only)
+  const bootstrapLoadedRef = useRef(false);
+  const fetchBootstrap = useCallback(() => {
     // Only show loading spinner on initial fetch, not on background polls.
     // Setting loading on every poll clears the agent dropdown momentarily.
-    if (!agentsLoadedRef.current) setAgentsLoading(true);
-    fetch("/api/agents")
+    if (!bootstrapLoadedRef.current) setAgentsLoading(true);
+    fetch("/api/chat/bootstrap", { cache: "no-store" })
       .then((r) => r.json())
-      .then((data) => {
+      .then((data: ChatBootstrapResponse) => {
         const agentList = data.agents || [];
+        const modelList = Array.isArray(data.models) ? data.models : [];
         setAgents(agentList);
-        if (agentList.length > 0) agentsLoadedRef.current = true;
+        setAvailableModels(
+          modelList
+            .map((m) => ({
+              key: String(m.key ?? ""),
+              name: String(m.name ?? m.key ?? ""),
+            }))
+            .filter((m) => m.key)
+        );
+        bootstrapLoadedRef.current = true;
         if (
           agentList.length > 0 &&
           !agentList.find((a: Agent) => a.id === selectedAgent)
@@ -1321,9 +1335,13 @@ export function ChatView({ isVisible = true }: { isVisible?: boolean }) {
             return next;
           });
         }
+        setModelsLoaded(true);
         setAgentsLoading(false);
       })
-      .catch(() => setAgentsLoading(false));
+      .catch(() => {
+        setModelsLoaded(true);
+        setAgentsLoading(false);
+      });
   }, [selectedAgent]);
 
   useEffect(() => {
@@ -1340,44 +1358,16 @@ export function ChatView({ isVisible = true }: { isVisible?: boolean }) {
   // Fetch agents: fast-poll (2s) during warm-up, normal (30s) otherwise
   useEffect(() => {
     queueMicrotask(() => {
-      if (isVisible) void fetchAgents();
+      if (isVisible) void fetchBootstrap();
     });
     const ms = warmingUp ? 2000 : 30000;
     const interval = setInterval(() => {
       if (isVisible && document.visibilityState === "visible") {
-        void fetchAgents();
+        void fetchBootstrap();
       }
     }, ms);
     return () => clearInterval(interval);
-  }, [fetchAgents, isVisible, warmingUp]);
-
-  const fetchModels = useCallback(() => {
-    fetch("/api/models?scope=configured", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((data) => {
-        const list = Array.isArray(data.models) ? data.models : [];
-        setAvailableModels(
-          list
-            .map((m: { key?: string; name?: string }) => ({
-              key: String(m.key ?? ""),
-              name: String(m.name ?? m.key ?? ""),
-            }))
-            .filter((m: { key: string }) => m.key)
-        );
-      })
-      .catch(() => { })
-      .finally(() => setModelsLoaded(true));
-  }, []);
-
-  // Fetch models on mount AND whenever the chat view becomes visible again
-  // (user may have added a provider key on /models in the meantime)
-  useEffect(() => {
-    fetchModels();
-  }, [fetchModels]);
-
-  useEffect(() => {
-    if (isVisible) fetchModels();
-  }, [isVisible, fetchModels]);
+  }, [fetchBootstrap, isVisible, warmingUp]);
 
   useEffect(() => {
     if (!isVisible) return;
@@ -1567,7 +1557,7 @@ export function ChatView({ isVisible = true }: { isVisible?: boolean }) {
             </div>
             <button
               type="button"
-              onClick={fetchAgents}
+              onClick={fetchBootstrap}
               className="flex items-center gap-1.5 rounded-lg border border-foreground/10 bg-muted/60 px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground/70"
             >
               <RefreshCw className="h-3 w-3" />
@@ -1592,7 +1582,7 @@ export function ChatView({ isVisible = true }: { isVisible?: boolean }) {
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={fetchAgents}
+                onClick={fetchBootstrap}
                 className="flex items-center gap-1.5 rounded-lg border border-foreground/10 bg-muted/60 px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground/70"
               >
                 <RefreshCw className="h-3 w-3" />
@@ -1622,7 +1612,7 @@ export function ChatView({ isVisible = true }: { isVisible?: boolean }) {
               isVisible={isVisible}
               availableModels={availableModels}
               modelsLoaded={modelsLoaded}
-              onKeySaved={fetchModels}
+              onKeySaved={fetchBootstrap}
               isPostOnboarding={isPostOnboarding}
               onClearPostOnboarding={clearPostOnboarding}
             />

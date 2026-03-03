@@ -2,13 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState, useCallback, useSyncExternalStore, useRef } from "react";
-import {
-  setAutoRestartOnChanges,
-  subscribeAutoRestartPreference,
-  getAutoRestartSnapshot,
-  getAutoRestartServerSnapshot,
-} from "@/lib/auto-restart-preference";
+import { Suspense, useEffect, useState, useCallback, useSyncExternalStore } from "react";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -23,8 +17,6 @@ import {
   MessageCircle,
   Terminal,
   SquareTerminal,
-  RefreshCw,
-  Power,
   Cpu,
   Volume2,
   Database,
@@ -48,11 +40,6 @@ import {
   HelpCircle,
 } from "lucide-react";
 import { getChatUnreadCount, subscribeChatStore } from "@/lib/chat-store";
-import {
-  notifyGatewayRestarting,
-  useGatewayStatusStore,
-  type GatewayStatus,
-} from "@/lib/gateway-status-store";
 
 type NavItem = {
   section: string;
@@ -312,207 +299,6 @@ function SidebarNav({ onNavigate, collapsed }: { onNavigate?: () => void; collap
   );
 }
 
-/* ── Gateway status + restart badge ─────────────── */
-
-const STATUS_COLORS: Record<GatewayStatus, string> = {
-  online: "bg-emerald-400",
-  degraded: "bg-amber-400",
-  offline: "bg-red-500",
-  loading: "bg-zinc-500 animate-pulse",
-};
-
-const STATUS_RING: Record<GatewayStatus, string> = {
-  online: "ring-emerald-400/30",
-  degraded: "ring-amber-400/30",
-  offline: "ring-red-500/30",
-  loading: "ring-muted-foreground/30",
-};
-
-const STATUS_LABELS: Record<GatewayStatus, string> = {
-  online: "Online",
-  degraded: "Degraded",
-  offline: "Offline",
-  loading: "Checking...",
-};
-
-function GatewayBadge({ collapsed }: { collapsed?: boolean }) {
-  const { status, restarting } = useGatewayStatusStore();
-  const [showMenu, setShowMenu] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const autoRestartOnChanges = useSyncExternalStore(
-    subscribeAutoRestartPreference,
-    getAutoRestartSnapshot,
-    getAutoRestartServerSnapshot,
-  );
-
-  useEffect(() => {
-    if (!showMenu) return;
-
-    const handlePointerDown = (event: PointerEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setShowMenu(false);
-      }
-    };
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setShowMenu(false);
-      }
-    };
-
-    document.addEventListener("pointerdown", handlePointerDown);
-    window.addEventListener("keydown", handleEscape);
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-      window.removeEventListener("keydown", handleEscape);
-    };
-  }, [showMenu]);
-
-  const handleRestart = useCallback(async () => {
-    setShowMenu(false);
-    notifyGatewayRestarting();
-    try {
-      await fetch("/api/gateway", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "restart" }),
-      });
-    } catch {
-      // ignore
-    }
-  }, []);
-
-  const handleStop = useCallback(async () => {
-    setShowMenu(false);
-    notifyGatewayRestarting();
-    try {
-      await fetch("/api/gateway", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "stop" }),
-      });
-    } catch {
-      // ignore
-    }
-  }, []);
-
-  return (
-    <div className="relative" ref={menuRef}>
-      <button
-        type="button"
-        onClick={() => setShowMenu(!showMenu)}
-        className={cn(
-          "flex w-full items-center gap-2.5 rounded-lg transition-all duration-200",
-          "hover:bg-foreground/[0.06]",
-          collapsed ? "justify-center px-2 py-2.5" : "px-3 py-2.5"
-        )}
-      >
-        <div className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-foreground/[0.06] text-sm shadow-sm">
-          🦞
-          {collapsed && (
-            <div
-              className={cn(
-                "absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full ring-2 ring-sidebar",
-                STATUS_COLORS[status],
-                STATUS_RING[status]
-              )}
-            />
-          )}
-        </div>
-        {!collapsed && (
-          <div className="flex-1 text-left">
-            <div className="flex items-center gap-1.5">
-              <div
-                className={cn(
-                  "h-2 w-2 rounded-full ring-2",
-                  STATUS_COLORS[status],
-                  STATUS_RING[status]
-                )}
-              />
-              <span className="text-xs font-medium text-muted-foreground">
-                Gateway
-              </span>
-            </div>
-            <span className="text-xs text-muted-foreground/60">
-              {restarting ? "Restarting..." : STATUS_LABELS[status]}
-            </span>
-          </div>
-        )}
-      </button>
-
-      {showMenu && (
-        <div className="absolute bottom-full left-0 z-50 mb-1.5 w-56 min-w-56 overflow-hidden rounded-lg glass-strong py-1">
-          <button
-            type="button"
-            onClick={handleRestart}
-            disabled={restarting}
-            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-foreground/70 transition-colors hover:bg-foreground/[0.06] hover:text-foreground disabled:opacity-50"
-          >
-            {restarting ? (
-              <span className="inline-flex items-center gap-0.5">
-                <span className="h-1 w-1 animate-bounce rounded-full bg-current [animation-delay:0ms]" />
-                <span className="h-1 w-1 animate-bounce rounded-full bg-current [animation-delay:150ms]" />
-                <span className="h-1 w-1 animate-bounce rounded-full bg-current [animation-delay:300ms]" />
-              </span>
-            ) : (
-              <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
-            )}
-            Restart Gateway
-          </button>
-          <button
-            type="button"
-            onClick={handleStop}
-            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-red-400 transition-colors hover:bg-red-500/10 hover:text-red-300"
-          >
-            <Power className="h-3.5 w-3.5" />
-            Stop Gateway
-          </button>
-          <div className="mx-2 my-1 h-px bg-foreground/[0.06]" />
-          <label className="flex cursor-pointer items-center justify-between gap-2 px-3 py-2 text-left text-xs text-muted-foreground hover:text-foreground/80">
-            <span>Auto-restart on changes</span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={autoRestartOnChanges}
-              onClick={(e) => {
-                e.preventDefault();
-                setAutoRestartOnChanges(!autoRestartOnChanges);
-              }}
-              className={cn(
-                "relative h-5 w-9 shrink-0 rounded-full transition-colors duration-200",
-                autoRestartOnChanges ? "bg-primary" : "bg-foreground/10"
-              )}
-            >
-              <span
-                className={cn(
-                  "absolute top-0.5 block h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200",
-                  autoRestartOnChanges ? "left-4" : "left-0.5"
-                )}
-              />
-            </button>
-          </label>
-          <div className="mx-2 my-1 h-px bg-foreground/[0.06]" />
-          <div className="px-3 py-1.5">
-            <span
-              className={cn(
-                "inline-flex items-center gap-1.5 text-xs",
-                status === "online" ? "text-emerald-400" : status === "degraded" ? "text-amber-400" : "text-red-400"
-              )}
-            >
-              <span
-                className={cn(
-                  "h-1.5 w-1.5 rounded-full",
-                  STATUS_COLORS[status]
-                )}
-              />
-              {STATUS_LABELS[status]}
-            </span>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 export function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => {
@@ -587,9 +373,6 @@ export function Sidebar() {
         <Suspense fallback={<div className="flex-1" />}>
           <SidebarNav onNavigate={closeMobile} collapsed={collapsed} />
         </Suspense>
-        <div className="border-t border-foreground/[0.06]">
-          <GatewayBadge collapsed={collapsed} />
-        </div>
         {/* Collapse / expand toggle — desktop only */}
         <div className={cn("hidden border-t border-foreground/[0.06] md:block", collapsed ? "px-2 py-2" : "px-3 py-2")}>
           <button

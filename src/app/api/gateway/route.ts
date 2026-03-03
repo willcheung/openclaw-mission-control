@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { runCliJson, gatewayCall } from "@/lib/openclaw";
+import { gatewayCall } from "@/lib/openclaw";
 import { getOpenClawBin, getGatewayUrl } from "@/lib/paths";
 import { execFile } from "child_process";
 import { promisify } from "util";
@@ -83,10 +83,9 @@ async function probeGatewayHttp(): Promise<{
  *
  * Strategy:
  *   1. Quick HTTP probe to the gateway (< 3s) for liveness.
- *   2. If alive, run `openclaw health --json` via direct CLI spawn
- *      (not through auto-transport which re-routes through the gateway).
+ *   2. If alive, query `health` / `status` over Gateway RPC.
  *   3. Return online/offline based on the probe; include full health
- *      data when the CLI completes in time.
+ *      data when RPC completes in time.
  */
 export async function GET() {
   // Fast liveness check first
@@ -102,25 +101,19 @@ export async function GET() {
   // Gateway is alive — ensure OpenResponses endpoint is enabled for streaming chat
   ensureResponsesEndpoint();
 
-  // Try to get full health data via CLI (directly,
-  // bypassing auto-transport to avoid the recursive exec-through-gateway issue).
+  // Try to get full health/status data via Gateway RPC.
   try {
-    const bin = await getOpenClawBin();
-    const { stdout } = await exec(bin, ["health", "--json"], {
-      timeout: 25000,
-      env: { ...process.env, NO_COLOR: "1" },
+    const [health, status] = await Promise.all([
+      gatewayCall<Record<string, unknown>>("health", {}, 12000),
+      gatewayCall<Record<string, unknown>>("status", {}, 12000).catch(() => null),
+    ]);
+    return NextResponse.json({
+      status: health.ok === true ? "online" : "degraded",
+      health,
+      ...(status ? { gatewayStatus: status } : {}),
     });
-    // Parse JSON from stdout (may have non-JSON prefix lines from plugin loading)
-    const jsonStart = stdout.indexOf("{");
-    if (jsonStart >= 0) {
-      const health = JSON.parse(stdout.slice(jsonStart));
-      return NextResponse.json({
-        status: health.ok ? "online" : "degraded",
-        health,
-      });
-    }
   } catch {
-    // CLI timed out or failed — but gateway IS reachable via HTTP
+    // RPC failed — but gateway IS reachable via HTTP
   }
 
   // Gateway is reachable but full health data unavailable — report online

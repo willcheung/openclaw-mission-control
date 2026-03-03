@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { gatewayCall, runCli } from "@/lib/openclaw";
+import { runOpenResponsesText } from "@/lib/openresponses";
 import { readFile, stat } from "fs/promises";
 import { extname, join } from "path";
 import { getOpenClawHome } from "@/lib/paths";
@@ -75,10 +76,23 @@ async function generateTestPhrase(): Promise<string> {
       context,
     ].join("\n");
 
-    const output = await runCli(
-      ["agent", "--agent", "main", "--message", prompt],
-      15000
-    );
+    let output = "";
+    try {
+      const result = await runOpenResponsesText({
+        input: prompt,
+        agentId: "main",
+        timeoutMs: 15000,
+      });
+      if (!result.ok) {
+        throw new Error(result.text || `Gateway returned ${result.status}`);
+      }
+      output = result.text;
+    } catch {
+      output = await runCli(
+        ["agent", "--agent", "main", "--message", prompt],
+        15000
+      );
+    }
     const phrase = output.trim().replace(/^["']|["']$/g, ""); // strip wrapping quotes
     if (phrase && phrase.length > 10 && phrase.length < 300) {
       return phrase;

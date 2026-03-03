@@ -112,7 +112,7 @@ export async function POST(req: Request) {
       });
     } catch (err) {
       clearTimeout(timeout);
-      // Gateway unreachable — client should fall back to CLI
+      // Gateway unreachable — client should fall back to non-streaming /api/chat
       return new Response(
         JSON.stringify({ error: "gateway_unreachable", message: String(err) }),
         { status: 502, headers: { "Content-Type": "application/json" } },
