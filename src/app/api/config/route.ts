@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { gatewayCall, runCliCaptureBoth } from "@/lib/openclaw";
+import { sanitizeConfigFile } from "@/lib/gateway-config";
 import { readFile } from "fs/promises";
 import { join } from "path";
 import { getOpenClawHome } from "@/lib/paths";
@@ -439,7 +440,7 @@ export async function PATCH(request: NextRequest) {
       patchObj: Record<string, unknown>,
       hash: string
     ): Promise<Record<string, unknown>> => {
-      return gatewayCallWithRetry<Record<string, unknown>>(
+      const result = await gatewayCallWithRetry<Record<string, unknown>>(
         "config.patch",
         {
           raw: JSON.stringify(patchObj),
@@ -449,6 +450,9 @@ export async function PATCH(request: NextRequest) {
         20000,
         1
       );
+      // Strip leaked RPC keys the gateway may have persisted into the config.
+      await sanitizeConfigFile().catch(() => {});
+      return result;
     };
 
     const touchesGatewayAuthMode =

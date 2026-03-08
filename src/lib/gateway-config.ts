@@ -7,11 +7,54 @@
  */
 
 import { gatewayCall, runCliCaptureBoth } from "./openclaw";
+import { getOpenClawHome } from "./paths";
+import { readFile, writeFile } from "fs/promises";
+import { join } from "path";
 
 // ── Helpers ──────────────────────────────────────
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Keys that are RPC parameters for config.patch, NOT valid config keys.
+ * Some gateway versions accidentally persist these into openclaw.json.
+ */
+const LEAKED_RPC_KEYS = ["raw", "baseHash", "restartDelayMs"];
+
+/**
+ * Strip leaked RPC parameters from the config file on disk.
+ * Returns true if the file was modified.
+ */
+export async function sanitizeConfigFile(): Promise<boolean> {
+  const configPath = join(getOpenClawHome(), "openclaw.json");
+  let content: string;
+  try {
+    content = await readFile(configPath, "utf-8");
+  } catch {
+    return false;
+  }
+  let config: Record<string, unknown>;
+  try {
+    config = JSON.parse(content) as Record<string, unknown>;
+  } catch {
+    return false;
+  }
+  if (typeof config !== "object" || config === null || Array.isArray(config)) {
+    return false;
+  }
+  let changed = false;
+  for (const key of LEAKED_RPC_KEYS) {
+    if (key in config) {
+      delete config[key];
+      changed = true;
+    }
+  }
+  if (changed) {
+    await writeFile(configPath, JSON.stringify(config, null, 2) + "\n", "utf-8");
+  }
+  return changed;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -213,6 +256,7 @@ export async function patchConfig(
             patchParams.restartDelayMs = opts.restartDelayMs;
           }
           await gatewayCall("config.patch", patchParams, 15000);
+          await sanitizeConfigFile().catch(() => {});
           return;
         } catch {
           if (!fallback.entries) {
@@ -235,6 +279,7 @@ export async function patchConfig(
         patchParams.restartDelayMs = opts.restartDelayMs;
       }
       await gatewayCall("config.patch", patchParams, 15000);
+      await sanitizeConfigFile().catch(() => {});
       return;
     } catch (error) {
       lastError = error;

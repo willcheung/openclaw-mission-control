@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { readFile } from "fs/promises";
 import { join } from "path";
 import { gatewayCall, runCli } from "@/lib/openclaw";
-import { patchConfig } from "@/lib/gateway-config";
+import { patchConfig, sanitizeConfigFile } from "@/lib/gateway-config";
 import { getOpenClawHome } from "@/lib/paths";
 
 export const dynamic = "force-dynamic";
@@ -186,6 +186,11 @@ export async function POST(request: NextRequest) {
         // without needing the gateway RPC. This avoids the
         // config.patch → gateway-self-restart → poll-until-alive dance
         // that caused timeout errors during onboarding.
+        //
+        // Strip any leaked RPC keys (raw, baseHash, restartDelayMs) from
+        // the config first — some gateway versions accidentally persist
+        // these, which causes the CLI's config validator to reject the file.
+        await sanitizeConfigFile().catch(() => {});
         await runCli(
           ["channels", "add", "--channel", channel, "--token", token],
           15000,

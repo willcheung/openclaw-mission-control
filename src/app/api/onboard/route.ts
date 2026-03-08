@@ -17,7 +17,7 @@ import { access, readFile, writeFile, mkdir } from "fs/promises";
 import { join, dirname } from "path";
 import { randomBytes } from "crypto";
 import { runCli } from "@/lib/openclaw";
-import { patchConfig } from "@/lib/gateway-config";
+import { patchConfig, sanitizeConfigFile } from "@/lib/gateway-config";
 import { getOpenClawBin, getOpenClawHome, getDefaultWorkspace, getGatewayUrl } from "@/lib/paths";
 import {
   buildProviderCredentialPatch,
@@ -626,6 +626,8 @@ export async function POST(request: NextRequest) {
         }
 
         // 4. Start gateway if not running
+        // Strip any leaked RPC keys before CLI commands validate the config.
+        await sanitizeConfigFile().catch(() => {});
         const gatewayUrl = await getGatewayUrl();
         const gwHealth = await checkGatewayHealth(gatewayUrl);
         if (!gwHealth.running) {
@@ -698,6 +700,7 @@ export async function POST(request: NextRequest) {
 
       /* ── start-gateway ──────────────────────────────── */
       case "start-gateway": {
+        await sanitizeConfigFile().catch(() => {});
         const gatewayUrl = await getGatewayUrl();
         const gwHealth = await checkGatewayHealth(gatewayUrl);
         if (gwHealth.running) {
