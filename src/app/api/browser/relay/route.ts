@@ -3,7 +3,8 @@ import { access, readFile } from "fs/promises";
 import { constants as fsConstants } from "fs";
 import { homedir } from "os";
 import { join } from "path";
-import { getClient } from "@/lib/openclaw-client";
+import { getGatewayPort } from "@/lib/paths";
+import { runCliJson, runCli } from "@/lib/openclaw-cli";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -140,21 +141,71 @@ async function pathExists(pathValue: string): Promise<boolean> {
   }
 }
 
-async function gwGet<T>(path: string, profile: string | null, timeout = 12000): Promise<T> {
-  const client = await getClient();
+/**
+ * Resolve the browser control server URL.
+ * The browser control HTTP API runs on gateway port + 2 (e.g. 18789 → 18791).
+ */
+let _browserControlUrl: string | null = null;
+async function getBrowserControlUrl(): Promise<string> {
+  if (_browserControlUrl) return _browserControlUrl;
+  const gwPort = await getGatewayPort();
+  _browserControlUrl = `http://127.0.0.1:${gwPort + 2}`;
+  return _browserControlUrl;
+}
+
+async function getBrowserAuthHeaders(): Promise<Record<string, string>> {
+  try {
+    const configPath = join(homedir(), ".openclaw", "openclaw.json");
+    const raw = await readFile(configPath, "utf-8");
+    const config = JSON.parse(raw) as { gateway?: { auth?: { token?: string } } };
+    const token = config?.gateway?.auth?.token;
+    if (token) return { Authorization: `Bearer ${token}` };
+  } catch {
+    // no config or no token
+  }
+  const envToken = process.env.OPENCLAW_GATEWAY_TOKEN;
+  if (envToken) return { Authorization: `Bearer ${envToken}` };
+  return {};
+}
+
+/**
+ * Map route.ts paths to browser control server paths.
+ * The browser control server has its own path layout:
+ * - /browser/status  → /           (root returns status)
+ * - /browser/profiles → /profiles
+ * - /browser/tabs    → /tabs
+ * - /browser/start   → POST /start
+ * - /browser/stop    → POST /stop
+ * - /browser/snapshot → /snapshot
+ * - /browser/screenshot → POST /screenshot
+ * - /browser/extension/* → not available on browser control server
+ */
+function toBrowserControlPath(path: string): string {
+  const stripped = path.replace(/^\/browser/, "");
+  if (stripped === "/status" || stripped === "") return "/";
+  return stripped;
+}
+
+async function browserGet<T>(path: string, profile: string | null, timeout = 12000): Promise<T> {
+  const baseUrl = await getBrowserControlUrl();
+  const authHeaders = await getBrowserAuthHeaders();
   const qs = profile ? `?profile=${encodeURIComponent(profile)}` : "";
-  const res = await client.gatewayFetch(`${path}${qs}`, {
+  const controlPath = toBrowserControlPath(path);
+  const res = await fetch(`${baseUrl}${controlPath}${qs}`, {
+    headers: { ...authHeaders },
     signal: AbortSignal.timeout(timeout),
   });
   if (!res.ok) throw new Error(`GET ${path} ${res.status}: ${await res.text().catch(() => "")}`);
   return res.json() as Promise<T>;
 }
 
-async function gwPost<T>(path: string, body: Record<string, unknown>, timeout = 15000): Promise<T> {
-  const client = await getClient();
-  const res = await client.gatewayFetch(path, {
+async function browserPost<T>(path: string, body: Record<string, unknown>, timeout = 15000): Promise<T> {
+  const baseUrl = await getBrowserControlUrl();
+  const authHeaders = await getBrowserAuthHeaders();
+  const controlPath = toBrowserControlPath(path);
+  const res = await fetch(`${baseUrl}${controlPath}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(timeout),
   });
@@ -177,17 +228,18 @@ type ExtensionPathResponse = {
 };
 
 async function buildSnapshot(profile: string | null): Promise<RelaySnapshot> {
-  const statusP = gwGet<BrowserStatus>("/browser/status", profile)
+  const statusP = browserGet<BrowserStatus>("/browser/status", profile)
     .then((value) => ({ value, error: null as string | null }))
     .catch((err) => ({ value: null, error: parseError(err) }));
-  const profilesP = gwGet<BrowserProfiles>("/browser/profiles", null)
+  const profilesP = browserGet<BrowserProfiles>("/browser/profiles", null)
     .then((value) => ({ value, error: null as string | null }))
     .catch((err) => ({ value: null, error: parseError(err) }));
-  const tabsP = gwGet<BrowserTabs>("/browser/tabs", profile)
+  const tabsP = browserGet<BrowserTabs>("/browser/tabs", profile)
     .then((value) => ({ value, error: null as string | null }))
     .catch((err) => ({ value: null, error: parseError(err) }));
-  const extensionPathP = gwGet<ExtensionPathResponse | string>("/browser/extension/path", null)
-    .then((value) => ({ value, error: null as string | null }))
+  // Extension path is CLI-only (not on browser control server)
+  const extensionPathP = runCliJson<ExtensionPathResponse>(["browser", "extension", "path"], 10000)
+    .then((value) => ({ value: value as ExtensionPathResponse | string, error: null as string | null }))
     .catch((err) => ({ value: null, error: parseError(err) }));
 
   const [statusR, profilesR, tabsR, extensionPathR] = await Promise.all([
@@ -314,20 +366,22 @@ export async function POST(request: NextRequest) {
     let result: Record<string, unknown> = {};
     switch (action) {
       case "start": {
-        result = await gwPost<Record<string, unknown>>("/browser/start", { profile });
+        result = await browserPost<Record<string, unknown>>("/browser/start", { profile });
         break;
       }
       case "stop": {
-        result = await gwPost<Record<string, unknown>>("/browser/stop", { profile });
+        result = await browserPost<Record<string, unknown>>("/browser/stop", { profile });
         break;
       }
       case "restart": {
-        await gwPost("/browser/stop", { profile }).catch(() => ({}));
-        result = await gwPost<Record<string, unknown>>("/browser/start", { profile }, 20000);
+        await browserPost("/browser/stop", { profile }).catch(() => ({}));
+        result = await browserPost<Record<string, unknown>>("/browser/start", { profile }, 20000);
         break;
       }
       case "install-extension": {
-        result = await gwPost<Record<string, unknown>>("/browser/extension/install", {});
+        // Extension install is CLI-only (not on browser control server)
+        const installArgs = ["browser", "extension", "install"];
+        result = await runCliJson<Record<string, unknown>>(installArgs, 15000);
         break;
       }
       case "open-test-tab": {
@@ -346,26 +400,27 @@ export async function POST(request: NextRequest) {
             { status: 400 }
           );
         }
-        result = await gwPost<Record<string, unknown>>(
-          "/browser/open",
-          { url: targetUrl, profile },
-          20000
-        );
+        // 'open' is CLI-only (not on browser control server)
+        const openArgs = ["browser", "open", targetUrl];
+        if (profile) openArgs.push("--browser-profile", profile);
+        result = await runCliJson<Record<string, unknown>>(openArgs, 20000);
         break;
       }
       case "snapshot-test": {
-        result = await gwPost<Record<string, unknown>>(
+        // Snapshot is GET-only on the browser control server
+        result = await browserGet<Record<string, unknown>>(
           "/browser/snapshot",
-          { efficient: true, limit: 60, profile },
+          profile,
           25000
         );
         break;
       }
       case "screenshot": {
-        const client = await getClient();
-        const screenshotRes = await client.gatewayFetch("/browser/screenshot", {
+        const baseUrl = await getBrowserControlUrl();
+        const authHeaders = await getBrowserAuthHeaders();
+        const screenshotRes = await fetch(`${baseUrl}/screenshot`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...authHeaders },
           body: JSON.stringify({ profile, format: "png", fullPage: false }),
           signal: AbortSignal.timeout(15000),
         });
@@ -382,7 +437,18 @@ export async function POST(request: NextRequest) {
           if (data.image && typeof data.image === "string") {
             result = { image: data.image.startsWith("data:") ? data.image : `data:image/png;base64,${data.image}` };
           } else {
-            result = data;
+            // Gateway returns {ok, path, targetId, url} — read the image from disk
+            const imgPath = typeof data.path === "string" ? data.path : null;
+            if (imgPath) {
+              try {
+                const imgBuffer = await readFile(imgPath);
+                result = { image: `data:image/png;base64,${imgBuffer.toString("base64")}` };
+              } catch {
+                result = data;
+              }
+            } else {
+              result = data;
+            }
           }
         }
         break;
