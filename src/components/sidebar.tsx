@@ -346,11 +346,7 @@ export function Sidebar() {
       return next;
     });
   }, []);
-  const versionLabel = process.env.NEXT_PUBLIC_APP_VERSION
-    ? (process.env.NEXT_PUBLIC_APP_VERSION.startsWith("v")
-        ? process.env.NEXT_PUBLIC_APP_VERSION
-        : `v${process.env.NEXT_PUBLIC_APP_VERSION}`)
-    : "v0";
+  const commitHash = process.env.NEXT_PUBLIC_COMMIT_HASH || "";
 
   useEffect(() => {
     if (!mobileOpen) return;
@@ -473,9 +469,11 @@ export function Sidebar() {
                     <span className="text-sm font-bold tracking-tight text-stone-900 dark:text-[#f5f7fa]">
                       Mission Control
                     </span>
-                    <span className="shrink-0 rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-medium text-stone-500 dark:bg-[#171a1d] dark:text-[#7a8591]">
-                      {versionLabel}
-                    </span>
+                    {commitHash && (
+                      <span className="shrink-0 rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-mono font-medium text-stone-500 dark:bg-[#171a1d] dark:text-[#7a8591]">
+                        {commitHash}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
