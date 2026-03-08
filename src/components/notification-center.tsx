@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect, useSyncExternalStore } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, CheckCheck, CheckCircle, Clock, AlertCircle, AlertTriangle, Info, Zap, Terminal, Radio } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -240,7 +240,7 @@ export function NotificationCenter() {
   }, [open]);
 
   // Merge polled events + store notifications into unified display list
-  const displayItems: DisplayItem[] = (() => {
+  const displayItems = useMemo((): DisplayItem[] => {
     const polledItems: DisplayItem[] = events.map((e) => ({
       id: e.id,
       type: e.type,
@@ -273,7 +273,7 @@ export function NotificationCenter() {
     return Array.from(byId.values())
       .sort((a, b) => b.timestamp - a.timestamp)
       .slice(0, 25);
-  })();
+  }, [events, storeNotifications, lastSeenTs, readIds]);
 
   const unreadCount = displayItems.filter((d) => !d.read).length;
 

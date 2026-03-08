@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { Trash2, RefreshCw, MessageSquare, Clock, Zap, DollarSign, AlertCircle } from "lucide-react";
 import { estimateCostUsd } from "@/lib/model-metadata";
 import { cn } from "@/lib/utils";
@@ -68,7 +68,6 @@ export function SessionsView() {
   const [refreshing, setRefreshing] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
   const hasLoadedOnce = useRef(false);
 
   const fetchSessions = useCallback(async () => {
@@ -102,30 +101,25 @@ export function SessionsView() {
   const killSession = useCallback(
     async (key: string) => {
       setDeleting(key);
-      setDeleteError(null);
       try {
         const res = await fetch(
           `/api/sessions?key=${encodeURIComponent(key)}`,
           { method: "DELETE", signal: AbortSignal.timeout(10000) },
         );
         if (!res.ok) {
-          const errMsg = `Failed to kill session (${res.status})`;
-          setDeleteError(errMsg);
-          notifyError("Session kill failed", errMsg, "sessions");
+          notifyError("Session kill failed", `Failed to kill session (${res.status})`, "sessions");
           setDeleting(null);
           return;
         }
         const data = await res.json();
         if (data.ok || data.deleted) {
-          // Optimistically remove the session from state to avoid flicker
           setSessions((prev) => prev.filter((s) => s.key !== key));
           setConfirmDelete(null);
         } else {
-          setDeleteError("Gateway did not confirm deletion");
+          notifyError("Session kill failed", "Gateway did not confirm deletion", "sessions");
         }
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : "Network error";
-        setDeleteError(errMsg);
         notifyError("Session kill failed", errMsg, "sessions");
       }
       setDeleting(null);
@@ -134,9 +128,11 @@ export function SessionsView() {
   );
 
   // Clear stale confirmDelete if the session disappeared
-  if (confirmDelete && !sessions.some((s) => s.key === confirmDelete)) {
-    setConfirmDelete(null);
-  }
+  useEffect(() => {
+    if (confirmDelete && !sessions.some((s) => s.key === confirmDelete)) {
+      setConfirmDelete(null);
+    }
+  }, [confirmDelete, sessions]);
 
   if (loading) {
     return (
@@ -189,21 +185,6 @@ export function SessionsView() {
               className="shrink-0 rounded-lg bg-red-100 px-3 py-1.5 text-xs font-medium text-red-700 transition-colors hover:bg-red-200 dark:bg-red-500/20 dark:text-red-300 dark:hover:bg-red-500/30"
             >
               Retry
-            </button>
-          </div>
-        )}
-
-        {/* Delete error toast */}
-        {deleteError && (
-          <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 dark:border-red-500/20 dark:bg-red-500/10">
-            <AlertCircle className="h-3.5 w-3.5 shrink-0 text-red-500" />
-            <p className="flex-1 text-xs text-red-700 dark:text-red-400">{deleteError}</p>
-            <button
-              type="button"
-              onClick={() => setDeleteError(null)}
-              className="text-xs text-red-500 hover:text-red-700 dark:hover:text-red-300"
-            >
-              Dismiss
             </button>
           </div>
         )}

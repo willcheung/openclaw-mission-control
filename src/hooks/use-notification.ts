@@ -4,6 +4,10 @@ import { useCallback } from "react";
 import {
   notificationStore,
   useNotificationStore,
+  notifyError,
+  notifySuccess,
+  notifyWarning,
+  notifyInfo,
   type NotificationSeverity,
   type NotificationDisplayMode,
   type NotificationAction,
@@ -34,62 +38,6 @@ export function useNotification() {
       notificationStore.push({
         type: opts.type ?? "app",
         ...opts,
-      }),
-    [],
-  );
-
-  const notifyError = useCallback(
-    (title: string, detail?: string, source?: string) =>
-      notificationStore.push({
-        type: "app-error",
-        severity: "error",
-        title,
-        detail,
-        source,
-        displayMode: "both",
-        autoDismissMs: 8000,
-      }),
-    [],
-  );
-
-  const notifySuccess = useCallback(
-    (title: string, detail?: string, source?: string) =>
-      notificationStore.push({
-        type: "app-success",
-        severity: "success",
-        title,
-        detail,
-        source,
-        displayMode: "toast",
-        autoDismissMs: 4000,
-      }),
-    [],
-  );
-
-  const notifyWarning = useCallback(
-    (title: string, detail?: string, source?: string) =>
-      notificationStore.push({
-        type: "app-warning",
-        severity: "warning",
-        title,
-        detail,
-        source,
-        displayMode: "both",
-        autoDismissMs: 6000,
-      }),
-    [],
-  );
-
-  const notifyInfo = useCallback(
-    (title: string, detail?: string, source?: string) =>
-      notificationStore.push({
-        type: "app-info",
-        severity: "info",
-        title,
-        detail,
-        source,
-        displayMode: "toast",
-        autoDismissMs: 4000,
       }),
     [],
   );

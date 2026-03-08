@@ -65,6 +65,14 @@ function loadReadIds(): Set<string> {
   }
 }
 
+// Hydrate read state from localStorage on init
+const _initialReadIds = loadReadIds();
+if (_initialReadIds.size > 0) {
+  notifications = notifications.map((n) =>
+    _initialReadIds.has(n.id) ? { ...n, read: true } : n,
+  );
+}
+
 function persistReadIds() {
   if (typeof window === "undefined") return;
   try {
@@ -90,9 +98,17 @@ function buildSnapshot(): NotificationStoreSnapshot {
 }
 
 let cachedSnapshot: NotificationStoreSnapshot = buildSnapshot();
+let cachedToasts: AppNotification[] = [];
+let cachedBellNotifications: AppNotification[] = [];
 
 function updateSnapshot() {
   cachedSnapshot = buildSnapshot();
+  cachedToasts = notifications.filter(
+    (n) => !n.dismissed && (n.displayMode === "toast" || n.displayMode === "both"),
+  );
+  cachedBellNotifications = notifications.filter(
+    (n) => !n.dismissed && (n.displayMode === "bell" || n.displayMode === "both"),
+  );
   emit();
 }
 
@@ -129,9 +145,11 @@ export const notificationStore = {
       (n) => !n.dismissed && n.dedupKey === key,
     );
     if (existing) {
-      existing.timestamp = Date.now();
-      existing.detail = opts.detail ?? existing.detail;
-      existing.read = false;
+      notifications = notifications.map((n) =>
+        n.id === existing.id
+          ? { ...n, timestamp: Date.now(), detail: opts.detail ?? n.detail, read: false }
+          : n,
+      );
       updateSnapshot();
       return existing.id;
     }
@@ -153,7 +171,17 @@ export const notificationStore = {
       dedupKey: key,
     };
 
-    notifications = [notification, ...notifications].slice(0, MAX_NOTIFICATIONS);
+    // Clean up dismiss timers for evicted notifications
+    const prev = notifications;
+    notifications = [notification, ...prev].slice(0, MAX_NOTIFICATIONS);
+    for (let i = notifications.length; i < prev.length; i++) {
+      const evicted = prev[i];
+      const timer = dismissTimers.get(evicted.id);
+      if (timer) {
+        clearTimeout(timer);
+        dismissTimers.delete(evicted.id);
+      }
+    }
     updateSnapshot();
     scheduleDismiss(notification);
     return id;
@@ -163,7 +191,9 @@ export const notificationStore = {
   markRead(id: string) {
     const n = notifications.find((n) => n.id === id);
     if (n && !n.read) {
-      n.read = true;
+      notifications = notifications.map((n) =>
+        n.id === id ? { ...n, read: true } : n,
+      );
       persistReadIds();
       updateSnapshot();
     }
@@ -171,24 +201,21 @@ export const notificationStore = {
 
   /** Mark all notifications as read. */
   markAllRead() {
-    let changed = false;
-    for (const n of notifications) {
-      if (!n.read) {
-        n.read = true;
-        changed = true;
-      }
-    }
-    if (changed) {
-      persistReadIds();
-      updateSnapshot();
-    }
+    if (!notifications.some((n) => !n.read)) return;
+    notifications = notifications.map((n) =>
+      n.read ? n : { ...n, read: true },
+    );
+    persistReadIds();
+    updateSnapshot();
   },
 
   /** Dismiss a notification (hide from UI, clear auto-dismiss timer). */
   dismiss(id: string) {
     const n = notifications.find((n) => n.id === id);
     if (n && !n.dismissed) {
-      n.dismissed = true;
+      notifications = notifications.map((n) =>
+        n.id === id ? { ...n, dismissed: true } : n,
+      );
       const timer = dismissTimers.get(id);
       if (timer) {
         clearTimeout(timer);
@@ -208,16 +235,12 @@ export const notificationStore = {
 
   /** Get all active toast notifications (for ToastRenderer). */
   getToasts(): AppNotification[] {
-    return notifications.filter(
-      (n) => !n.dismissed && (n.displayMode === "toast" || n.displayMode === "both"),
-    );
+    return cachedToasts;
   },
 
   /** Get all bell notifications (for NotificationCenter). */
   getBellNotifications(): AppNotification[] {
-    return notifications.filter(
-      (n) => !n.dismissed && (n.displayMode === "bell" || n.displayMode === "both"),
-    );
+    return cachedBellNotifications;
   },
 
   /* ── useSyncExternalStore integration ── */
@@ -238,53 +261,32 @@ export const notificationStore = {
 
 /* ── Convenience helpers ── */
 
-export function notifyError(title: string, detail?: string, source?: string) {
+const SEVERITY_DEFAULTS: Record<
+  NotificationSeverity,
+  { displayMode: NotificationDisplayMode; autoDismissMs: number }
+> = {
+  error:   { displayMode: "both",  autoDismissMs: 8000 },
+  warning: { displayMode: "both",  autoDismissMs: 6000 },
+  success: { displayMode: "toast", autoDismissMs: 4000 },
+  info:    { displayMode: "toast", autoDismissMs: 4000 },
+};
+
+function notifyBySeverity(severity: NotificationSeverity, title: string, detail?: string, source?: string) {
+  const defaults = SEVERITY_DEFAULTS[severity];
   return notificationStore.push({
-    type: "app-error",
-    severity: "error",
+    type: `app-${severity}`,
+    severity,
     title,
     detail,
     source,
-    displayMode: "both",
-    autoDismissMs: 8000,
+    ...defaults,
   });
 }
 
-export function notifySuccess(title: string, detail?: string, source?: string) {
-  return notificationStore.push({
-    type: "app-success",
-    severity: "success",
-    title,
-    detail,
-    source,
-    displayMode: "toast",
-    autoDismissMs: 4000,
-  });
-}
-
-export function notifyWarning(title: string, detail?: string, source?: string) {
-  return notificationStore.push({
-    type: "app-warning",
-    severity: "warning",
-    title,
-    detail,
-    source,
-    displayMode: "both",
-    autoDismissMs: 6000,
-  });
-}
-
-export function notifyInfo(title: string, detail?: string, source?: string) {
-  return notificationStore.push({
-    type: "app-info",
-    severity: "info",
-    title,
-    detail,
-    source,
-    displayMode: "toast",
-    autoDismissMs: 4000,
-  });
-}
+export const notifyError   = (title: string, detail?: string, source?: string) => notifyBySeverity("error", title, detail, source);
+export const notifySuccess = (title: string, detail?: string, source?: string) => notifyBySeverity("success", title, detail, source);
+export const notifyWarning = (title: string, detail?: string, source?: string) => notifyBySeverity("warning", title, detail, source);
+export const notifyInfo    = (title: string, detail?: string, source?: string) => notifyBySeverity("info", title, detail, source);
 
 /* ── React hook ── */
 
