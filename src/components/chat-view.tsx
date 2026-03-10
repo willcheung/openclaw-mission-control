@@ -9,6 +9,7 @@ import {
   useMemo,
   useSyncExternalStore,
 } from "react";
+import { useSmartPoll } from "@/hooks/use-smart-poll";
 import { useChat } from "@ai-sdk/react";
 import { TextStreamChatTransport } from "ai";
 import {
@@ -1016,19 +1017,11 @@ export function ChatView({ isVisible = true }: { isVisible?: boolean }) {
     return () => clearTimeout(t);
   }, []);
 
-  // Fetch agents: fast-poll (2s) during warm-up, normal (30s) otherwise
-  useEffect(() => {
-    queueMicrotask(() => {
-      if (isVisible) void fetchBootstrap();
-    });
-    const ms = warmingUp ? 2000 : 30000;
-    const interval = setInterval(() => {
-      if (isVisible && document.visibilityState === "visible") {
-        void fetchBootstrap();
-      }
-    }, ms);
-    return () => clearInterval(interval);
-  }, [fetchBootstrap, isVisible, warmingUp]);
+  // Fetch agents: fast-poll (10s) during warm-up, normal (30s) otherwise
+  useSmartPoll(fetchBootstrap, {
+    intervalMs: warmingUp ? 10000 : 30000,
+    enabled: isVisible,
+  });
 
   useEffect(() => {
     if (!isVisible) return;

@@ -54,15 +54,11 @@ const CHANNELS = [
 
 async function readChannelsConfig(): Promise<Record<string, unknown>> {
   const home = getOpenClawHome();
-  for (const p of [join(home, "openclaw.json"), join(home, ".openclaw", "openclaw.json")]) {
-    try {
-      const raw = await readFile(p, "utf-8");
-      const parsed = JSON.parse(raw);
-      if (isRecord(parsed) && isRecord(parsed.channels)) return parsed.channels;
-    } catch {
-      /* try next */
-    }
-  }
+  try {
+    const raw = await readFile(join(home, "openclaw.json"), "utf-8");
+    const parsed = JSON.parse(raw);
+    if (isRecord(parsed) && isRecord(parsed.channels)) return parsed.channels;
+  } catch { /* */ }
   return {};
 }
 

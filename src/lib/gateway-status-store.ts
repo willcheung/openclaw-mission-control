@@ -2,6 +2,8 @@ import { useSyncExternalStore } from "react";
 
 export type GatewayHealth = Record<string, unknown> | null;
 export type GatewayStatus = "online" | "degraded" | "offline" | "loading";
+/** Mirrors the OPENCLAW_TRANSPORT env var returned by /api/status. */
+export type TransportMode = "cli" | "auto" | string | null;
 
 type Snapshot = {
   status: GatewayStatus;
@@ -10,6 +12,8 @@ type Snapshot = {
   latencyMs: number | null;
   /** True once at least one full poll cycle has completed (success or failure). */
   initialCheckDone: boolean;
+  /** Transport mode reported by /api/status — "cli" means CLI fallback is active. */
+  transport: TransportMode;
 };
 
 const RESTART_EVENT = "gateway-restarting";
@@ -20,6 +24,7 @@ let snapshot: Snapshot = {
   restarting: false,
   latencyMs: null,
   initialCheckDone: false,
+  transport: null,
 };
 
 const SERVER_SNAPSHOT: Snapshot = {
@@ -28,6 +33,7 @@ const SERVER_SNAPSHOT: Snapshot = {
   restarting: false,
   latencyMs: null,
   initialCheckDone: false,
+  transport: null,
 };
 
 const VALID_STATUSES = new Set<GatewayStatus>(["online", "degraded", "offline", "loading"]);
@@ -77,6 +83,7 @@ async function pollLite() {
     setSnapshot({
       status: nextStatus,
       latencyMs: typeof data.latencyMs === "number" ? data.latencyMs : null,
+      transport: typeof data.transport === "string" ? data.transport : null,
     });
     if (nextStatus === "offline" || nextStatus === "degraded") {
       switchToOfflinePolling();

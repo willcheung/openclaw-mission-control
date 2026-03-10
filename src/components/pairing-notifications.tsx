@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import { useSmartPoll } from "@/hooks/use-smart-poll";
 import {
   Bell,
   BellRing,
@@ -273,7 +274,6 @@ export function PairingNotifications() {
   const [hasNew, setHasNew] = useState(false);
   const prevCountRef = useRef(0);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   /* ── Fetch ─────────── */
   const abortRef = useRef<AbortController | null>(null);
@@ -297,19 +297,14 @@ export function PairingNotifications() {
     }
   }, []);
 
-  // Initial fetch + poll every 5s
+  // Initial fetch + poll every 15s
+  useSmartPoll(fetchData, { intervalMs: 15000 });
+
   useEffect(() => {
-    fetchData();
-    pollRef.current = setInterval(() => {
-      if (document.visibilityState === "visible") {
-        void fetchData();
-      }
-    }, 5000);
     return () => {
       abortRef.current?.abort();
-      if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [fetchData]);
+  }, []);
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -522,7 +517,7 @@ export function PairingNotifications() {
           {/* Footer */}
           <div className="border-t border-foreground/10 px-4 py-2">
             <p className="text-xs text-muted-foreground/60">
-              Polling every 5s &middot; DM codes expire after 1 hour
+              Polling every 15s &middot; DM codes expire after 1 hour
             </p>
           </div>
 

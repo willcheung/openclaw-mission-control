@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef, useMemo, useSyncExternalStore } from "react";
+import { useSmartPoll } from "@/hooks/use-smart-poll";
 import {
   Search,
   RefreshCw,
@@ -133,7 +134,6 @@ export function LogsView() {
   const [autoScroll, setAutoScroll] = useState(true);
   const [limit, setLimit] = useState(200);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Debounce search: only update debouncedSearch 300ms after the user stops typing
   useEffect(() => {
@@ -158,20 +158,8 @@ export function LogsView() {
     }
   }, [limit, debouncedSearch, sourceFilter, levelFilter]);
 
-  // Initial fetch + auto-refresh
-  useEffect(() => {
-    queueMicrotask(() => fetchLogs());
-    if (autoRefresh) {
-      timerRef.current = setInterval(() => {
-        if (document.visibilityState === "visible") {
-          void fetchLogs();
-        }
-      }, 3000);
-    }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [fetchLogs, autoRefresh]);
+  // Initial fetch + auto-refresh every 10s (paused when autoRefresh is off)
+  useSmartPoll(fetchLogs, { intervalMs: 10000, enabled: autoRefresh });
 
   // Auto-scroll to bottom when new entries arrive
   useEffect(() => {
@@ -507,7 +495,7 @@ export function LogsView() {
           {autoRefresh && (
             <span className="flex items-center gap-1 text-xs text-emerald-500/60">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
-              Auto-refresh 3s
+              Auto-refresh 10s
             </span>
           )}
         </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback, useSyncExternalStore } from "react";
+import { useSmartPoll } from "@/hooks/use-smart-poll";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -652,8 +653,6 @@ function OcStatMini({
 
 /* ── component ───────────────────────────────────── */
 
-const POLL_INTERVAL = 8000;
-
 export function DashboardView() {
   const router = useRouter();
   const timeFormat = useSyncExternalStore(
@@ -666,7 +665,6 @@ export function DashboardView() {
   const [lastRefresh, setLastRefresh] = useState(0);
   const [now, setNow] = useState(() => Date.now());
   const [pairingSummary, setPairingSummary] = useState<PairingSummary | null>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { stats: sysStats, connected: sseConnected } = useSystemStats();
   const gwStore = useGatewayStatusStore();
@@ -691,8 +689,9 @@ export function DashboardView() {
     [router]
   );
 
+  useSmartPoll(fetchLive, { intervalMs: 10000 });
+
   useEffect(() => {
-    queueMicrotask(() => fetchLive());
     fetch("/api/system", { cache: "no-store" })
       .then((r) => r.json())
       .then(setSystem)
@@ -702,41 +701,15 @@ export function DashboardView() {
       .then(setPairingSummary)
       .catch(() => { });
 
-    const startLivePolling = () => {
-      if (pollRef.current) return;
-      pollRef.current = setInterval(() => {
-        void fetchLive();
-      }, POLL_INTERVAL);
-    };
-
-    const stopLivePolling = () => {
-      if (!pollRef.current) return;
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    };
-
-    const handleVisibility = () => {
-      if (document.hidden) stopLivePolling();
-      else {
-        void fetchLive();
-        startLivePolling();
-      }
-    };
-
-    if (!document.hidden) startLivePolling();
-    document.addEventListener("visibilitychange", handleVisibility);
-
     tickRef.current = setInterval(() => {
       if (document.hidden) return;
       setNow(Date.now());
     }, 1000);
 
     return () => {
-      document.removeEventListener("visibilitychange", handleVisibility);
-      if (pollRef.current) clearInterval(pollRef.current);
       if (tickRef.current) clearInterval(tickRef.current);
     };
-  }, [fetchLive]);
+  }, []);
 
   if (!live) {
     return (

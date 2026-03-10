@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSmartPoll } from "@/hooks/use-smart-poll";
 import {
   Bug,
   CheckCircle2,
@@ -285,7 +286,6 @@ export function BrowserRelayView({ isHosted = false }: { isHosted?: boolean }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [screenshotSrc, setScreenshotSrc] = useState<string | null>(null);
   const [screenshotLoading, setScreenshotLoading] = useState(false);
-  const [pollRetries, setPollRetries] = useState(0);
   const loadAbortRef = useRef<AbortController | null>(null);
 
   const load = useCallback(
@@ -306,7 +306,6 @@ export function BrowserRelayView({ isHosted = false }: { isHosted?: boolean }) {
           throw new Error(data.error || `HTTP ${res.status}`);
         }
         setSnapshot(data.snapshot);
-        setPollRetries(0); // Reset backoff on success
         if (data.docsUrl) setDocsUrl(data.docsUrl);
 
         const statusProfile = (data.snapshot.status?.profile || "").trim();
@@ -323,12 +322,6 @@ export function BrowserRelayView({ isHosted = false }: { isHosted?: boolean }) {
         if (err instanceof DOMException && err.name === "AbortError") return;
         const raw = err instanceof Error ? err.message : String(err);
         if (silent) {
-          // Background poll failure — use exponential backoff before showing error
-          setPollRetries((prev) => {
-            if (prev < 3) return prev + 1; // silently retry up to 3 times
-            setError(raw);
-            return prev;
-          });
           return;
         }
         setError(raw);
@@ -343,22 +336,7 @@ export function BrowserRelayView({ isHosted = false }: { isHosted?: boolean }) {
     void load();
   }, [load]);
 
-  useEffect(() => {
-    // Exponential backoff on poll failures: 10s, 20s, 40s, 80s
-    const interval = Math.min(10000 * Math.pow(2, pollRetries), 80000);
-    const pollId = window.setInterval(() => {
-      if (document.visibilityState === "visible") void load(true);
-    }, interval);
-    const onFocus = () => {
-      setPollRetries(0); // Reset backoff on manual focus
-      void load(true);
-    };
-    window.addEventListener("focus", onFocus);
-    return () => {
-      window.clearInterval(pollId);
-      window.removeEventListener("focus", onFocus);
-    };
-  }, [load, pollRetries]);
+  useSmartPoll(() => load(true), { intervalMs: 15000 });
 
   const runAction = useCallback(
     async (action: RelayAction, payload?: Record<string, unknown>) => {

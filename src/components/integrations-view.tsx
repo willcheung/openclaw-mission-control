@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSmartPoll } from "@/hooks/use-smart-poll";
 import { useSearchParams } from "next/navigation";
 import {
   AlertCircle,
@@ -373,10 +374,9 @@ export function IntegrationsView() {
     [data],
   );
 
-  useEffect(() => {
-    if (!pendingAuthEmail) return;
-    let cancelled = false;
-    const poll = async () => {
+  useSmartPoll(
+    async () => {
+      if (!pendingAuthEmail) return;
       try {
         const response = await fetch("/api/integrations", {
           method: "POST",
@@ -384,16 +384,14 @@ export function IntegrationsView() {
           body: JSON.stringify({ action: "poll-auth-status", email: pendingAuthEmail }),
         });
         const json = await response.json();
-        if (cancelled) return;
         if (json.authStatus === "completed" && json.snapshot) {
           setData(json.snapshot);
           setNotice("Google account connected successfully.");
         }
       } catch { /* ignore polling errors */ }
-    };
-    const interval = setInterval(poll, 3000);
-    return () => { cancelled = true; clearInterval(interval); };
-  }, [pendingAuthEmail]);
+    },
+    { intervalMs: 10000, enabled: !!pendingAuthEmail },
+  );
 
   const runAction = useCallback(
     async (action: string, body: Record<string, unknown>) => {

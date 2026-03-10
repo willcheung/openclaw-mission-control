@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { gatewayCall, runCliJson, runCli } from "@/lib/openclaw";
+import { gatewayCall, runCli } from "@/lib/openclaw";
 import { getOpenClawHome } from "@/lib/paths";
 import { readdir, readFile } from "fs/promises";
 import { join } from "path";
@@ -41,8 +41,7 @@ export async function GET() {
   const deviceRequests: DeviceRequest[] = [];
 
   // 1. Discover DM pairing channels by scanning credentials dir
-  // The gateway stores state in $OPENCLAW_HOME/.openclaw/ (nested), so check both paths.
-  const credDirs = [join(home, "credentials"), join(home, ".openclaw", "credentials")];
+  const credDirs = [join(home, "credentials")];
   for (const credDir of credDirs) {
     try {
       const files = await readdir(credDir);
@@ -91,38 +90,6 @@ export async function GET() {
       }
     } catch {
       // credentials dir may not exist
-    }
-  }
-
-  // Also try the CLI for a more authoritative list (telegram is the most common)
-  const cliChannels = ["telegram", "whatsapp", "discord"];
-  const cliResults = await Promise.allSettled(
-    cliChannels.map(async (ch) => ({
-      channel: ch,
-      data: await runCliJson<{ channel: string; requests: DmRequest[] }>(
-        ["pairing", "list", ch],
-        2500
-      ),
-    }))
-  );
-  for (const result of cliResults) {
-    if (result.status !== "fulfilled") continue;
-    const ch = result.value.channel;
-    for (const req of result.value.data.requests || []) {
-      const code = req.code || "";
-      if (code && !dmRequests.some((d) => d.code === code && d.channel === ch)) {
-        dmRequests.push({
-          ...req,
-          channel: ch,
-          code,
-          account:
-            typeof req.accountId === "string"
-              ? req.accountId
-              : typeof req.account === "string"
-                ? req.account
-                : undefined,
-        });
-      }
     }
   }
 

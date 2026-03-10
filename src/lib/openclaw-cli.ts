@@ -7,6 +7,33 @@ const exec = promisify(execFile);
 /** Env vars for all CLI subprocesses. Mission Control is always a trusted local process. */
 const CLI_ENV = { ...process.env, NO_COLOR: "1", OPENCLAW_ALLOW_INSECURE_PRIVATE_WS: "1" };
 
+// ── Concurrency semaphore ──────────────────────────────────────────────────
+// Caps the number of simultaneously live CLI subprocesses. Callers that
+// exceed the limit are queued and resume in FIFO order as slots free up.
+
+const CLI_MAX_CONCURRENT = 4;
+let cliInFlight = 0;
+const cliQueue: Array<() => void> = [];
+
+function acquireCliSlot(): Promise<void> {
+  if (cliInFlight < CLI_MAX_CONCURRENT) {
+    cliInFlight++;
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    cliQueue.push(() => {
+      cliInFlight++;
+      resolve();
+    });
+  });
+}
+
+function releaseCliSlot(): void {
+  cliInFlight--;
+  const next = cliQueue.shift();
+  if (next) next();
+}
+
 /** Result of a CLI run when both stdout and stderr are captured. */
 export type RunCliResult = {
   stdout: string;
@@ -22,30 +49,35 @@ export async function runCliCaptureBoth(
   args: string[],
   timeout = 15000
 ): Promise<RunCliResult> {
-  const bin = await getOpenClawBin();
-  return new Promise((resolve, reject) => {
-    const child = spawn(bin, args, {
-      env: CLI_ENV,
-      timeout,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    let stdout = "";
-    let stderr = "";
-    child.stdout?.on("data", (d: Buffer) => {
-      stdout += d.toString();
-    });
-    child.stderr?.on("data", (d: Buffer) => {
-      stderr += d.toString();
-    });
-    child.on("close", (code, signal) => {
-      resolve({
-        stdout,
-        stderr,
-        code: code ?? (signal ? -1 : 0),
+  await acquireCliSlot();
+  try {
+    const bin = await getOpenClawBin();
+    return await new Promise((resolve, reject) => {
+      const child = spawn(bin, args, {
+        env: CLI_ENV,
+        timeout,
+        stdio: ["ignore", "pipe", "pipe"],
       });
+      let stdout = "";
+      let stderr = "";
+      child.stdout?.on("data", (d: Buffer) => {
+        stdout += d.toString();
+      });
+      child.stderr?.on("data", (d: Buffer) => {
+        stderr += d.toString();
+      });
+      child.on("close", (code, signal) => {
+        resolve({
+          stdout,
+          stderr,
+          code: code ?? (signal ? -1 : 0),
+        });
+      });
+      child.on("error", reject);
     });
-    child.on("error", reject);
-  });
+  } finally {
+    releaseCliSlot();
+  }
 }
 
 export async function runCli(
@@ -53,33 +85,38 @@ export async function runCli(
   timeout = 15000,
   stdin?: string
 ): Promise<string> {
-  const bin = await getOpenClawBin();
-  if (stdin !== undefined) {
-    // Use spawn for stdin piping
-    return new Promise((resolve, reject) => {
-      const child = spawn(bin, args, {
-        env: CLI_ENV,
-        timeout,
-        stdio: ["pipe", "pipe", "pipe"],
+  await acquireCliSlot();
+  try {
+    const bin = await getOpenClawBin();
+    if (stdin !== undefined) {
+      // Use spawn for stdin piping
+      return await new Promise((resolve, reject) => {
+        const child = spawn(bin, args, {
+          env: CLI_ENV,
+          timeout,
+          stdio: ["pipe", "pipe", "pipe"],
+        });
+        let stdout = "";
+        let stderr = "";
+        child.stdout.on("data", (d: Buffer) => { stdout += d.toString(); });
+        child.stderr.on("data", (d: Buffer) => { stderr += d.toString(); });
+        child.on("close", (code) => {
+          if (code === 0) resolve(stdout);
+          else reject(new Error(`Command failed (exit ${code}): ${stderr || stdout}`));
+        });
+        child.on("error", reject);
+        child.stdin.write(stdin);
+        child.stdin.end();
       });
-      let stdout = "";
-      let stderr = "";
-      child.stdout.on("data", (d: Buffer) => { stdout += d.toString(); });
-      child.stderr.on("data", (d: Buffer) => { stderr += d.toString(); });
-      child.on("close", (code) => {
-        if (code === 0) resolve(stdout);
-        else reject(new Error(`Command failed (exit ${code}): ${stderr || stdout}`));
-      });
-      child.on("error", reject);
-      child.stdin.write(stdin);
-      child.stdin.end();
+    }
+    const { stdout } = await exec(bin, args, {
+      timeout,
+      env: CLI_ENV,
     });
+    return stdout;
+  } finally {
+    releaseCliSlot();
   }
-  const { stdout } = await exec(bin, args, {
-    timeout,
-    env: CLI_ENV,
-  });
-  return stdout;
 }
 
 const ANSI_ESCAPE_PATTERN =

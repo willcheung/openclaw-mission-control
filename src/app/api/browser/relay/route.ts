@@ -3,7 +3,7 @@ import { access, readFile } from "fs/promises";
 import { constants as fsConstants } from "fs";
 import { homedir } from "os";
 import { join } from "path";
-import { getGatewayPort } from "@/lib/paths";
+import { getGatewayPort, getOpenClawHome } from "@/lib/paths";
 import { runCliJson } from "@/lib/openclaw-cli";
 
 export const dynamic = "force-dynamic";
@@ -155,7 +155,7 @@ async function getBrowserControlUrl(): Promise<string> {
 
 async function getBrowserAuthHeaders(): Promise<Record<string, string>> {
   try {
-    const configPath = join(homedir(), ".openclaw", "openclaw.json");
+    const configPath = join(getOpenClawHome(), "openclaw.json");
     const raw = await readFile(configPath, "utf-8");
     const config = JSON.parse(raw) as { gateway?: { auth?: { token?: string } } };
     const token = config?.gateway?.auth?.token;

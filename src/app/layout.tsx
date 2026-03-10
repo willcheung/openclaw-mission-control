@@ -10,6 +10,7 @@ import { ChatNotificationToast } from "@/components/chat-notification-toast";
 import { SetupGate } from "@/components/setup-gate";
 import { UsageAlertMonitor } from "@/components/usage-alert-monitor";
 import { OpenClawUpdateBanner } from "@/components/openclaw-update-banner";
+import { CliModeBanner } from "@/components/cli-mode-banner";
 import { ToastRenderer } from "@/components/toast-renderer";
 
 const inter = Inter({
@@ -109,6 +110,7 @@ export default function RootLayout({
               <Sidebar />
               <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
                 <Header />
+                <CliModeBanner />
                 <main className="flex flex-1 overflow-hidden bg-stone-50 dark:bg-[#101214]">
                   {children}
                 </main>

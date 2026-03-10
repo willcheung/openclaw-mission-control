@@ -189,17 +189,17 @@ export async function POST(request: NextRequest) {
           return json({ ok: true, model });
         } catch (patchErr) {
           console.error("[set-primary] patchConfig failed, trying disk fallback:", patchErr);
-          // Disk fallback — write to the nested config the gateway actually uses
+          // Disk fallback — write to the main config file
           try {
-            const nestedPath = join(OPENCLAW_HOME, ".openclaw", "openclaw.json");
+            const configPath = join(OPENCLAW_HOME, "openclaw.json");
             let config: Record<string, unknown> = {};
-            try { config = JSON.parse(await readFile(nestedPath, "utf-8")); } catch { /* */ }
+            try { config = JSON.parse(await readFile(configPath, "utf-8")); } catch { /* */ }
             const agents = (config.agents || {}) as Record<string, unknown>;
             const defaults = (agents.defaults || {}) as Record<string, unknown>;
             defaults.model = { primary: model };
             agents.defaults = defaults;
             config.agents = agents;
-            await writeFile(nestedPath, JSON.stringify(config, null, 2) + "\n", "utf-8");
+            await writeFile(configPath, JSON.stringify(config, null, 2) + "\n", "utf-8");
             return json({ ok: true, model });
           } catch (err) {
             return json({ error: `Failed to set model: ${err}` }, 500);
