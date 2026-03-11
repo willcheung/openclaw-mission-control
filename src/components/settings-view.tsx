@@ -40,6 +40,13 @@ import {
 import { chatStore } from "@/lib/chat-store";
 
 const isAgentbayHosted = process.env.NEXT_PUBLIC_AGENTBAY_HOSTED === "true";
+const missionControlVersion = process.env.NEXT_PUBLIC_APP_VERSION || "";
+const missionControlCommitHash = process.env.NEXT_PUBLIC_COMMIT_HASH || "";
+const missionControlBuildLabel = missionControlVersion
+  ? missionControlCommitHash && missionControlCommitHash !== "unknown"
+    ? `${missionControlVersion} (${missionControlCommitHash})`
+    : missionControlVersion
+  : "—";
 
 /* ── Types ────────────────────────────────────────── */
 
@@ -835,6 +842,12 @@ export function SettingsView() {
           icon={Info}
           iconColor="text-blue-400"
         >
+          <SettingRow label="Mission Control version">
+            <span className="font-mono text-xs text-foreground/70">
+              {missionControlBuildLabel}
+            </span>
+          </SettingRow>
+
           <SettingRow label="OpenClaw version">
             <span className="font-mono text-xs text-foreground/70">
               {onboard?.version || "—"}
