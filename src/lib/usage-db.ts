@@ -9,6 +9,7 @@ const exec = promisify(execFile);
 const DB_PATH = join(getOpenClawHome(), "mission-control", "usage.db");
 
 let initialized = false;
+let initPromise: Promise<void> | null = null;
 
 function sqlQuote(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
@@ -100,8 +101,15 @@ export async function usageDbGetMeta(key: string): Promise<string | null> {
 
 export async function ensureUsageDb(): Promise<void> {
   if (initialized) return;
-  await mkdir(dirname(DB_PATH), { recursive: true });
-  const schema = `
+  if (initPromise) {
+    await initPromise;
+    return;
+  }
+  initPromise = (async () => {
+    const home = getOpenClawHome();
+    await mkdir(home, { recursive: true });
+    await mkdir(dirname(DB_PATH), { recursive: true });
+    const schema = `
 PRAGMA journal_mode=WAL;
 PRAGMA busy_timeout=5000;
 
@@ -237,6 +245,13 @@ CREATE TABLE IF NOT EXISTS usage_meta (
   updated_at_ms INTEGER NOT NULL
 );
 `;
-  await sqlite([DB_PATH, schema], 30000);
-  initialized = true;
+    try {
+      await sqlite([DB_PATH, schema], 30000);
+      initialized = true;
+    } catch (e) {
+      initPromise = null;
+      throw e;
+    }
+  })();
+  await initPromise;
 }

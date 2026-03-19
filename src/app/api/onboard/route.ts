@@ -211,7 +211,16 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    let body: Record<string, unknown>;
+    try {
+      const raw = await request.json();
+      body = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+    } catch {
+      return NextResponse.json(
+        { ok: false, error: "Invalid or empty JSON body" },
+        { status: 400 },
+      );
+    }
     const action = body.action as string;
 
     switch (action) {
