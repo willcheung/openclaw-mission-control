@@ -18,6 +18,9 @@ import {
   Search,
   Filter,
   FileText,
+  FilePlus,
+  FileEdit,
+  FolderSearch,
   Terminal,
   User,
   Bot,
@@ -25,6 +28,19 @@ import {
   Database,
   Brain,
   CalendarRange,
+  Globe,
+  Eye,
+  MousePointerClick,
+  Camera,
+  Keyboard,
+  Download,
+  ImageIcon,
+  Users,
+  ListTree,
+  Activity,
+  CheckSquare,
+  Wrench,
+  type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SectionBody, SectionHeader, SectionLayout } from "@/components/section-layout";
@@ -193,17 +209,126 @@ function SessionList({
   );
 }
 
+// ── Tool icon / color lookup ───────────────────────────────────────────────────
+
+type ToolMeta = { icon: LucideIcon; color: string };
+
+function toolMeta(name: string): ToolMeta {
+  const n = name.toLowerCase();
+
+  // Terminal / shell execution
+  if (/^(exec|bash|shell|run_command|execute|terminal|run_terminal|computer)$/.test(n) ||
+      /\b(exec|bash|shell)\b/.test(n))
+    return { icon: Terminal, color: "text-amber-600 dark:text-amber-400" };
+
+  // File write / create
+  if (/^(write|write_file|create_file|save_file|file_write|str_replace_editor)$/.test(n) ||
+      /\b(write|create)\b/.test(n))
+    return { icon: FilePlus, color: "text-emerald-600 dark:text-emerald-400" };
+
+  // File edit / patch
+  if (/^(edit|edit_file|patch|str_replace|replace|update_file|file_edit)$/.test(n) ||
+      /\b(edit|patch|replace)\b/.test(n))
+    return { icon: FileEdit, color: "text-blue-600 dark:text-blue-400" };
+
+  // File read / view
+  if (/^(read|read_file|view|cat|file_read|open_file)$/.test(n) ||
+      /\b(read|view)\b/.test(n))
+    return { icon: FileText, color: "text-stone-500 dark:text-stone-400" };
+
+  // Glob / file search / ls / find
+  if (/^(glob|find|ls|list_files|list_dir|directory|folder|file_search)$/.test(n) ||
+      /\b(glob|find|ls)\b/.test(n))
+    return { icon: FolderSearch, color: "text-violet-600 dark:text-violet-400" };
+
+  // Grep / content search
+  if (/^(grep|search_files|search_code|search_text|ripgrep|rg)$/.test(n) ||
+      /\b(grep|search_files)\b/.test(n))
+    return { icon: Search, color: "text-violet-600 dark:text-violet-400" };
+
+  // Web search
+  if (/^(web_search|search_web|google|bing|serpapi|brave_search)$/.test(n) ||
+      /\b(web_search|search_web)\b/.test(n))
+    return { icon: Search, color: "text-sky-600 dark:text-sky-400" };
+
+  // Web fetch / HTTP
+  if (/^(web_fetch|fetch|http|curl|wget|url_fetch|get_url|scrape)$/.test(n) ||
+      /\b(fetch|http|curl)\b/.test(n))
+    return { icon: Download, color: "text-sky-600 dark:text-sky-400" };
+
+  // Browser navigate
+  if (/^(browser_navigate|navigate|goto|browser_open)$/.test(n) ||
+      /\b(navigate|browser)\b/.test(n))
+    return { icon: Globe, color: "text-sky-600 dark:text-sky-400" };
+
+  // Browser click / interact
+  if (/^(browser_click|click|browser_select|browser_drag|browser_hover)$/.test(n) ||
+      /\b(click|select|hover|drag)\b/.test(n))
+    return { icon: MousePointerClick, color: "text-sky-500 dark:text-sky-300" };
+
+  // Browser type / fill
+  if (/^(browser_type|browser_fill|browser_fill_form|type_text|input)$/.test(n) ||
+      /\b(type|fill|input)\b/.test(n))
+    return { icon: Keyboard, color: "text-sky-500 dark:text-sky-300" };
+
+  // Browser screenshot / vision
+  if (/^(browser_take_screenshot|screenshot|browser_snapshot|browser_vision|vision)$/.test(n) ||
+      /\b(screenshot|snapshot|vision)\b/.test(n))
+    return { icon: Camera, color: "text-sky-500 dark:text-sky-300" };
+
+  // Browser misc (press key, wait, evaluate, etc.)
+  if (/^browser_/.test(n))
+    return { icon: Globe, color: "text-sky-500 dark:text-sky-300" };
+
+  // Image generation / manipulation
+  if (/^(image|generate_image|image_gen|dall_e|stable_diffusion|img)$/.test(n) ||
+      /\b(image|img)\b/.test(n))
+    return { icon: ImageIcon, color: "text-pink-600 dark:text-pink-400" };
+
+  // Memory
+  if (/^(memory_search|memory_write|memory_read|memory_update|memory|remember|recall)$/.test(n) ||
+      /\b(memory|remember|recall)\b/.test(n))
+    return { icon: Brain, color: "text-purple-600 dark:text-purple-400" };
+
+  // Agent / session spawning / subagents
+  if (/^(sessions_spawn|spawn|subagents|agent_spawn|delegate|handoff)$/.test(n) ||
+      /\b(spawn|subagent|delegate|handoff)\b/.test(n))
+    return { icon: Users, color: "text-indigo-600 dark:text-indigo-400" };
+
+  // Session management / history / list
+  if (/^(sessions_list|sessions_history|sessions_yield|sessions_search|process)$/.test(n) ||
+      /\b(session|history)\b/.test(n))
+    return { icon: ListTree, color: "text-stone-500 dark:text-stone-400" };
+
+  // Process / system activity
+  if (/^(activity|process|ps|kill|signal|service)$/.test(n))
+    return { icon: Activity, color: "text-orange-600 dark:text-orange-400" };
+
+  // Todo / task management
+  if (/^(todo|task|todowrite|checklist|kanban)$/.test(n) ||
+      /\b(todo|task)\b/.test(n))
+    return { icon: CheckSquare, color: "text-teal-600 dark:text-teal-400" };
+
+  // Agent / bot actions
+  if (/^(agent|bot|mcp_|tool_)/.test(n))
+    return { icon: Bot, color: "text-indigo-600 dark:text-indigo-400" };
+
+  // Fallback
+  return { icon: Wrench, color: "text-amber-600 dark:text-amber-400" };
+}
+
 // ── Event Card ────────────────────────────────────────────────────────────────
 
 function ToolCallBlock({ call }: { call: ToolCallSummary }) {
   const [expanded, setExpanded] = useState(false);
+  const { icon: Icon, color } = toolMeta(call.name);
   return (
     <div className="rounded border border-amber-200 bg-amber-50/50 dark:border-amber-500/20 dark:bg-amber-500/5">
       <button
         onClick={() => setExpanded((v) => !v)}
         className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs"
       >
-        <Terminal className="h-3 w-3 shrink-0 text-amber-600 dark:text-amber-400" />
+        <Icon className={cn("h-3 w-3 shrink-0", color)} />
         <span className="font-mono font-medium text-amber-700 dark:text-amber-300">{call.name}</span>
         {expanded ? (
           <ChevronDown className="ml-auto h-3 w-3 text-stone-400" />
@@ -226,6 +351,7 @@ function ToolResultBlock({ result }: { result: ToolResultSummary }) {
   const [expanded, setExpanded] = useState(false);
   const content = result.diff ?? result.content;
   const preview = truncate(content.replace(/\n/g, " "), 80);
+  const { icon: Icon, color } = toolMeta(result.toolName);
 
   return (
     <div className="rounded border border-stone-200 bg-stone-50/50 dark:border-stone-700 dark:bg-stone-800/30">
@@ -233,7 +359,7 @@ function ToolResultBlock({ result }: { result: ToolResultSummary }) {
         onClick={() => setExpanded((v) => !v)}
         className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs"
       >
-        <Database className="h-3 w-3 shrink-0 text-stone-500 dark:text-stone-400" />
+        <Icon className={cn("h-3 w-3 shrink-0", color)} />
         <span className="font-mono text-stone-600 dark:text-stone-300">{result.toolName}</span>
         {!expanded && <span className="ml-2 text-stone-400 dark:text-stone-500">{preview}</span>}
         {expanded ? (
