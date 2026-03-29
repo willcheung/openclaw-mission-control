@@ -95,7 +95,9 @@ Browse all workspace files with a Monaco editor and live Markdown preview. A **Q
 openclaw --version   # verify
 ```
 
-### Install
+### Install & Deploy
+
+`setup.sh` installs dependencies, builds the production bundle, and starts Mission Control as a background service (launchd on macOS, systemd on Linux). After running it, Mission Control will start automatically on login.
 
 ```bash
 cd ~/.openclaw
@@ -106,12 +108,13 @@ cd mission-control
 
 Open `http://localhost:3333`.
 
-**Other ways to start:**
+**Other options:**
 
 ```bash
 PORT=8080 ./setup.sh              # different port
-./setup.sh --dev --no-service     # dev mode, no background service
-npm install && npm run dev        # manual
+./setup.sh --no-service           # install and build, but run in foreground instead of as a service
+./setup.sh --dev --no-service     # skip build, run dev server in foreground (for contributors)
+npm install && npm run dev        # manual dev server
 ```
 
 > OpenClaw Mission Control automatically finds your `~/.openclaw` directory. Nothing to configure.
