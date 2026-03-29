@@ -41,6 +41,7 @@ import {
   HelpCircle,
   Puzzle,
   Radio,
+  ScrollText,
 } from "lucide-react";
 import { getChatUnreadCount, subscribeChatStore } from "@/lib/chat-store";
 
@@ -61,6 +62,7 @@ const isAgentbayHosting = process.env.NEXT_PUBLIC_AGENTBAY_HOSTED === "true";
 const defaultNavItems: NavItem[] = [
   // ── Overview ──
   { group: "Overview", section: "dashboard", label: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
+  { section: "timeline", label: "Timeline", icon: ScrollText, href: "/timeline" },
   { section: "activity", label: "Activity", icon: Activity, href: "/activity" },
   { section: "usage", label: "Usage", icon: BarChart3, href: "/usage" },
   // ── Agents ──
@@ -82,6 +84,7 @@ const defaultNavItems: NavItem[] = [
   { section: "docs", label: "Documents", icon: FolderOpen, href: "/documents" },
   { section: "vectors", label: "Vector DB", icon: Database, href: "/vectors" },
   // ── Configure ──
+  { section: "env", label: "Env Vars", icon: KeyRound, href: "/env" },
   { section: "accounts", label: "API Keys", icon: KeyRound, href: "/accounts" },
   { section: "channels", label: "Channels", icon: Radio, href: "/channels" },
   { section: "security", label: "Security", icon: ShieldCheck, href: "/security" },
@@ -191,6 +194,8 @@ function deriveSectionFromPath(pathname: string): string | null {
     "config",
     "settings",
     "activity",
+    "timeline",
+    "env",
     "help",
   ]);
   return known.has(first) ? first : null;

@@ -878,6 +878,38 @@ export function DocsView() {
           </div>
         </div>
 
+        {/* Pinned critical files */}
+        {(() => {
+          const CRITICAL = ["MEMORY.md", "SOUL.md", "HEARTBEAT.md", "AGENTS.md", "USER.md", "TODO.md"];
+          const pinned = CRITICAL.map((name) => docs.find((d) => d.name === name)).filter(Boolean) as Doc[];
+          if (pinned.length === 0) return null;
+          return (
+            <div className="shrink-0 border-t border-foreground/10 px-2 py-2">
+              <p className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">
+                Quick Access
+              </p>
+              <div className="flex flex-col gap-0.5">
+                {pinned.map((doc) => (
+                  <button
+                    key={doc.path}
+                    type="button"
+                    onClick={() => loadDoc(doc)}
+                    className={cn(
+                      "flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted",
+                      selected?.path === doc.path
+                        ? "bg-[var(--accent-brand-subtle)] text-[var(--accent-brand-text)]"
+                        : "text-muted-foreground"
+                    )}
+                  >
+                    <FileText className="h-3 w-3 shrink-0 opacity-60" />
+                    <span className="font-mono">{doc.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Document list grouped by workspace -> type */}
         <div className="flex-1 overflow-y-auto px-2 pb-3">
           {loading ? (

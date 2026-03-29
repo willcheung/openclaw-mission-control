@@ -120,6 +120,14 @@ const ActivityView = dynamic(
   () => import("@/components/activity-view").then((m) => m.ActivityView),
   { loading: () => <SectionLoading /> }
 );
+const TimelineView = dynamic(
+  () => import("@/components/timeline-view").then((m) => m.TimelineView),
+  { loading: () => <SectionLoading /> }
+);
+const EnvManagerView = dynamic(
+  () => import("@/components/env-manager-view").then((m) => m.EnvManagerView),
+  { loading: () => <SectionLoading /> }
+);
 const HelpView = dynamic(
   () => import("@/components/help-view").then((m) => m.HelpView),
   { loading: () => <SectionLoading /> }
@@ -161,6 +169,8 @@ export type DashboardSection =
   | "hooks"
   | "doctor"
   | "activity"
+  | "timeline"
+  | "env"
   | "help"
   | "channels";
 
@@ -226,6 +236,10 @@ function SectionContent({ section }: { section: DashboardSection }) {
       return <DoctorView />;
     case "activity":
       return <ActivityView />;
+    case "timeline":
+      return <TimelineView />;
+    case "env":
+      return <EnvManagerView />;
     case "help":
       return <HelpView />;
     case "channels":

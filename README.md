@@ -1,231 +1,215 @@
-![Mission Control — OpenClaw GUI & AI Agent Dashboard](cover.png)
+# OpenClaw Mission Control
 
-# Mission Control
+**The open-source audit log and system of record for OpenClaw agents.**
 
-**Your command center for [OpenClaw](https://github.com/openclaw). See everything, control everything, from one screen.**
+OpenClaw Mission Control is a self-hosted AI agent audit log and activity tracker for [OpenClaw](https://github.com/openclaw). It answers the question you'll inevitably ask: *what did my agent actually do?*
 
-Monitor your AI agents in real time. Chat with them. Schedule jobs. Track costs. Manage memory. All from your browser, all running on your machine.
-
-## Please, consider supporting me and buy me a Claude Code Subscription!
-[![Buy Me a Claude Code Subscription!](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-orange?logo=buy-me-a-coffee)](https://www.buymeacoffee.com/robsanna)
-
-
-**你的 [OpenClaw](https://github.com/openclaw) 指挥中心。一屏总览，一键掌控。**
-
-实时监控你的 AI 智能体、对话、调度任务、追踪费用、管理记忆 —— 一切在浏览器中完成，一切在你的设备上运行。
-
-[![OpenClaw GUI](https://img.shields.io/badge/OpenClaw-GUI-7c3aed?style=flat-square&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCI+PHRleHQgeT0iMjAiIGZvbnQtc2l6ZT0iMjAiPjwvdGV4dD48L3N2Zz4=)](https://github.com/openclaw) ![AI Dashboard](https://img.shields.io/badge/AI_Agent-Dashboard-22c55e?style=flat-square) ![Self-Hosted](https://img.shields.io/badge/Self--Hosted-Local_AI-f59e0b?style=flat-square) ![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)
+![Self-Hosted](https://img.shields.io/badge/Self--Hosted-Local_AI-f59e0b?style=flat-square) ![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square) ![Next.js](https://img.shields.io/badge/Next.js-16-black?style=flat-square) ![Tests](https://img.shields.io/badge/Tests-105_passing-22c55e?style=flat-square)
 
 ---
 
-## Why Mission Control?
+## What It Does
 
-**Stop juggling terminals.** If you're running OpenClaw, you already know the power. Mission Control gives you the picture — a single place to see what your agents are doing, how much they're costing, and whether things are healthy.
+Running autonomous AI agents means giving up direct visibility into what's happening. Mission Control gives it back.
 
-**Your data never leaves your machine.** Mission Control runs 100% locally. No cloud, no telemetry, no accounts. It's just a window into the OpenClaw system already running on your computer.
+- **Activity Timeline** — replay any agent session event by event: messages, thinking traces, tool calls, diffs, model switches; **live-updates automatically** when sessions change
+- **Filesystem Audit Log** — every file create/edit/delete in your workspace is recorded to `memory/audit.jsonl` and streamed live over SSE
+- **Git Auto-Commit** — workspace changes are committed automatically every 30 minutes with descriptive messages; roll back to any point
+- **Environment Variables** — read and write `.env` files directly from the browser, values masked by default
+- **File Explorer** — browse, edit, and search all workspace files; critical files (MEMORY.md, SOUL.md, HEARTBEAT.md, etc.) are one click away
+- **Cmd+K Search** — semantic search across your entire workspace
+- Full **agent management**, **chat**, **cron jobs**, **usage tracking**, **memory**, **models**, **terminal**, and **health diagnostics**
 
-**Works instantly.** Install it, open your browser, done. Mission Control automatically finds your OpenClaw setup — no configuration, no environment files to fill out, no database to set up.
-
----
-
-## The Thin-Layer Philosophy
-
-Mission Control is **not** a separate platform. It doesn't store your data, doesn't run its own database, and doesn't try to be the source of truth.
-
-Instead, it's a **transparent window** into OpenClaw. Every screen, every number, every status you see comes directly from your running OpenClaw system in real time. When you make a change in Mission Control, it goes straight to OpenClaw — no sync delays, no stale caches, no "refresh to see updates."
-
-**Why this matters to you:**
-- **Always accurate** — what you see is what's actually happening, right now
-- **Nothing to maintain** — no database migrations, no backup scripts, no cleanup jobs
-- **Impossible to break** — if Mission Control goes down, your agents keep running untouched
-- **Instant setup** — no provisioning, no storage allocation, no schema upgrades between versions
-
-Think of it like the dashboard on your car. It shows you speed, fuel, and engine status — but removing it doesn't stop the car from driving. That's Mission Control for OpenClaw.
+Everything runs on your machine. No cloud, no accounts, no telemetry.
 
 ---
 
-## What You Get
+## Why OpenClaw Mission Control
 
-### See Everything at a Glance
-**Dashboard** gives you a live overview the moment you open it — which agents are active, gateway health, running cron jobs, and system resources (CPU, memory, disk). No clicking around to find out if things are working.
+**You should never have to ask "what did my agent do?"**
 
-### Talk to Your Agents
-**Chat** lets you have a conversation with any of your agents directly in the browser. Attach files, pick which model to use, and get streaming responses. Switch between agents without losing context.
+Most agent dashboards show you status. OpenClaw Mission Control shows you *history* — the complete, unambiguous record of what was decided, why, and what changed as a result. It's built for solo founders and small teams running OpenClaw who need accountability without complexity.
 
-### Organize Work Visually
-**Tasks** is a built-in Kanban board (Backlog, In Progress, Review, Done) that syncs with your workspace. Drag cards between columns, see what's in flight, keep your agents focused.
+**Zero additional infrastructure.** No database, no external services. Mission Control reads directly from OpenClaw's session files, workspace, and gateway API. If Mission Control goes down, your agents keep running untouched.
 
-### Schedule Anything
-**Cron Jobs** lets you set up recurring tasks — "summarize my inbox every morning" or "check for updates every hour." Create, edit, pause, and test jobs with full run history so you can see exactly what happened.
+**Local-first.** Everything stays on your machine. Point it at a different OpenClaw setup with a single env var.
 
-### Know What Things Cost
-**Usage** tracks every token across every model and agent. See cost breakdowns, spot which agent is burning through budget, and understand where your money goes — all with charts, not spreadsheets.
+---
 
-### Manage Your Agent Team
-**Agents** shows your entire agent hierarchy as an interactive org chart. See who's active, which channels they're connected to, what workspace they're using, and spin up or shut down subagents on the spot.
+## Core Features
 
-### Keep Your Agents' Memory Sharp
-**Memory** lets you view and edit your agents' long-term memory and daily journals. **Vector Search** lets you find anything in your agents' semantic memory instantly.
+### Activity Timeline (`/timeline`)
 
-### Manage Models and Keys
-**Models** gives you one place to see every AI model available, set up provider credentials, configure fallback chains, and switch models per agent. No more editing config files by hand.
+A full chronological session browser. Select any session from the list and replay it event by event.
 
-### Monitor Health
-**Doctor** runs diagnostics and shows you exactly what's healthy and what needs attention, with one-click fixes for common issues. **Gateway** status is always visible so you know your system is connected.
+- Scans `~/.openclaw/agents/*/sessions/*.jsonl` — covers main agent and all sub-agents (Claude Code, Codex, etc.)
+- **Live updates** — subscribes to the SSE event stream; when any `.jsonl` file changes the session list refreshes automatically (debounced 500ms). A status indicator in the header shows `Live`, `Connecting…`, or `Disconnected`
+- **Filter by:** agent, date range, text search
+- **Event types:** user/assistant messages, thinking traces (collapsible), tool calls with args (expandable), tool results with diffs, model changes
+- Virtual scrolling via `@tanstack/react-virtual` — handles 1000+ event sessions without jank
+- Paginated loading (100 events/page) with load-more
 
-### Built-In Terminal
-**Terminal** gives you a full command line right in the dashboard — multiple tabs, color support, no need to switch windows.
+### Filesystem Watcher
 
-### Connect to Messaging
-**Channels** configures your agents' connections to Telegram, Discord, WhatsApp, Signal, and Slack — with QR code pairing where supported.
+Starts automatically when the server boots. No configuration.
 
-### Browse Your Files
-**Documents** lets you explore all workspace files across agents. **Search** (`Cmd+K`) gives you instant semantic search across everything.
+- Watches your workspace directory via chokidar
+- Writes structured audit events to `memory/audit.jsonl`
+- Streams change events to the browser in real time over SSE (`GET /api/events/stream`)
+- Ignores noise: `node_modules`, `.git`, `.next`, `dist`, build artifacts, editor temp files
 
-### Stay Secure
-**Security** runs audits on your setup and flags issues. **Permissions** controls what your agents are allowed to execute. **Accounts & Keys** manages all credentials in one place with proper masking.
+### Git Integration
 
-### Go Remote
-**Tailscale** integration lets you securely access your dashboard and agents from anywhere, with tunnel controls built right in.
+Auto-commits uncommitted workspace changes every 30 minutes.
 
-### Crash-Proof Panels
-Every section is wrapped in an **error boundary** — if one view has a problem, the rest of the dashboard keeps working. Hit Retry and you're back without reloading the whole page.
+```
+GET  /api/git           — current branch, dirty flag, ahead/behind
+GET  /api/git/log       — recent commit history
+GET  /api/git/diff      — file diffs (supports file + ref params)
+POST /api/git/commit    — manual commit with optional message
+POST /api/git/rollback  — revert to any commit ref
+```
+
+### Environment Variables (`/env`)
+
+Vercel-style editor for `.env` files — no terminal required.
+
+- Reads and writes `~/.openclaw/.env` and workspace `.env` directly
+- Values masked by default; click the eye icon to reveal
+- Inline edit, add, and delete; grouped by source
+- Values are never logged or included in audit events
+
+### Document Explorer (`/docs`)
+
+Browse all workspace files with a Monaco editor and live Markdown preview. A **Quick Access** panel is pinned above the file list for instant access to MEMORY.md, SOUL.md, HEARTBEAT.md, AGENTS.md, USER.md, and TODO.md.
 
 ---
 
 ## Quick Start
 
-### 1. Make sure OpenClaw is installed
+### Prerequisites
+
+[OpenClaw](https://github.com/openclaw) must be installed and running.
 
 ```bash
-# Install OpenClaw if you haven't already
-curl -fsSL https://openclaw.ai/install.sh | bash
-
-# Verify it's running
-openclaw --version
+openclaw --version   # verify
 ```
 
-### 2. Install Mission Control
+### Install
 
 ```bash
 cd ~/.openclaw
-git clone https://github.com/robsannaa/openclaw-mission-control.git
-cd openclaw-mission-control
+git clone <this-repo> mission-control
+cd mission-control
 ./setup.sh
 ```
 
-That's it. Open `http://localhost:3333` in your browser.
+Open `http://localhost:3333`.
 
 **Other ways to start:**
 
 ```bash
-# Change the port
-PORT=8080 ./setup.sh
-
-# Development mode (no background service)
-./setup.sh --dev --no-service
-
-# Manual mode
-npm install && npm run dev
+PORT=8080 ./setup.sh              # different port
+./setup.sh --dev --no-service     # dev mode, no background service
+npm install && npm run dev        # manual
 ```
 
-> **Zero configuration.** Mission Control automatically finds your `~/.openclaw` directory and the `openclaw` binary. Nothing to set up.
+> OpenClaw Mission Control automatically finds your `~/.openclaw` directory. Nothing to configure.
 
-### Let Your Agent Install It
+---
 
-Already talking to an OpenClaw agent? Just ask:
+## Development
+
+```bash
+npm run dev          # start dev server at http://localhost:3000
+npm test             # 105 unit tests (Jest + ts-jest)
+npm run test:e2e     # Playwright e2e (requires running dev server)
+npm run test:coverage
+npm run build        # production build
+```
+
+### Project Structure
 
 ```
-Hey, install Mission Control for me — here's the repo:
-https://github.com/robsannaa/openclaw-mission-control
+src/
+├── app/
+│   ├── api/
+│   │   ├── sessions/history/   — session listing + event pagination
+│   │   ├── events/             — audit log + SSE stream
+│   │   ├── git/                — status, log, diff, commit, rollback
+│   │   ├── env/                — env var CRUD
+│   │   └── docs/               — file explorer read/write
+│   └── (pages)/
+├── components/
+│   ├── timeline-view.tsx       — activity timeline UI
+│   ├── env-manager-view.tsx    — env vars UI
+│   └── docs-view.tsx           — file explorer UI
+└── lib/
+    ├── fs-watcher.ts           — chokidar watcher + SSE pub/sub
+    ├── git-manager.ts          — simple-git operations + auto-commit
+    ├── env-manager.ts          — .env file parser/serializer
+    └── paths.ts                — OpenClaw home/workspace detection
 ```
 
-Your agent will clone it, install dependencies, and start it up.
+---
+
+## Configuration
+
+Everything is auto-detected. Override with environment variables if needed:
+
+| Variable | Default | Description |
+|---|---|---|
+| `OPENCLAW_HOME` | `~/.openclaw` | OpenClaw data directory |
+| `OPENCLAW_BIN` | Auto-detected | Path to the `openclaw` binary |
+| `OPENCLAW_WORKSPACE` | Auto-detected | Default workspace folder |
+| `OPENCLAW_TRANSPORT` | `auto` | Gateway transport: `auto`, `http`, or `cli` |
+| `OPENCLAW_GATEWAY_URL` | `http://127.0.0.1:18789` | Gateway address |
+| `OPENCLAW_GATEWAY_TOKEN` | _(empty)_ | Bearer token for authenticated gateway access |
 
 ---
 
 ## Remote Access
 
-Running OpenClaw on a server? Access it from your laptop with SSH tunneling:
-
 ```bash
 ssh -N -L 3333:127.0.0.1:3333 user@your-server
 ```
 
-Then open `http://localhost:3333` on your local machine.
-
----
-
-## Environment Variables (optional)
-
-Everything is auto-detected, but you can override if needed:
-
-| Variable | Default | What it does |
-|---|---|---|
-| `OPENCLAW_HOME` | `~/.openclaw` | Where your OpenClaw data lives |
-| `OPENCLAW_BIN` | Auto-detected | Path to the `openclaw` command |
-| `OPENCLAW_WORKSPACE` | Auto-detected | Your default workspace folder |
-| `OPENCLAW_TRANSPORT` | `auto` | How to reach the gateway: `auto`, `http`, or `cli` |
-| `OPENCLAW_GATEWAY_URL` | `http://127.0.0.1:18789` | Gateway address (for remote setups) |
-| `OPENCLAW_GATEWAY_TOKEN` | _(empty)_ | Bearer token for authenticated gateway HTTP access |
-| `OPENCLAW_ALLOW_INSECURE_PRIVATE_WS` | _(unset)_ | Set to `1` to allow the OpenClaw CLI to connect to private/self-signed WebSocket endpoints (e.g. local gateway over `ws://`). Mission Control sets this when invoking the CLI; override only if you need different behavior. |
+Then open `http://localhost:3333` locally.
 
 ---
 
 ## FAQ
 
 <details>
-<summary><strong>"OpenClaw not found" — what do I do?</strong></summary>
-
-Make sure the `openclaw` command works in your terminal:
-
-```bash
-openclaw --version
-```
-
-If that works but the dashboard still complains, point it directly:
+<summary><strong>"OpenClaw not found"</strong></summary>
 
 ```bash
 OPENCLAW_BIN=$(which openclaw) npm run dev
 ```
 
-If `openclaw` isn't installed, [get it here](https://docs.openclaw.ai/install).
+Or [install OpenClaw](https://docs.openclaw.ai/install) first.
 </details>
 
 <details>
-<summary><strong>Does this send my data anywhere?</strong></summary>
+<summary><strong>Does this send data anywhere?</strong></summary>
 
-No. Everything runs on your machine. Mission Control talks to your local OpenClaw installation and nothing else. No analytics, no tracking, no cloud calls.
+No. Mission Control only talks to your local OpenClaw installation. No analytics, no tracking, no cloud calls.
 </details>
 
 <details>
-<summary><strong>Can I use this with multiple OpenClaw setups?</strong></summary>
-
-Yes — point to a different installation:
+<summary><strong>Multiple OpenClaw setups?</strong></summary>
 
 ```bash
 OPENCLAW_HOME=/path/to/other/.openclaw npm run dev -- --port 3001
 ```
 </details>
 
-<details>
-<summary><strong>Port already in use?</strong></summary>
-
-Pick a different one:
-
-```bash
-npm run dev -- --port 8080
-```
-</details>
-
----
-
-## Contributing
-
-Pull requests welcome. Found a bug or have an idea? [Open an issue](https://github.com/openclaw/dashboard/issues).
-
 ---
 
 ## License
 
 MIT
+
+---
+
+_Built on top of the [openclaw-mission-control](https://github.com/robsannaa/openclaw-mission-control) open-source base._
