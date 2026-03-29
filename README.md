@@ -2,7 +2,7 @@
 
 **The open-source audit log and system of record for OpenClaw agents.**
 
-OpenClaw Mission Control is a self-hosted AI agent audit log and activity tracker for [OpenClaw](https://github.com/openclaw). It answers the question you'll inevitably ask: *what did my agent actually do?*
+OpenClaw Mission Control is a deliberately thin, self-hosted dashboard for [OpenClaw](https://github.com/openclaw). No database, no message queue, no background workers — it reads directly from the files and APIs that OpenClaw already produces. It answers the question you'll inevitably ask: *what did my agent actually do?*
 
 ![Self-Hosted](https://img.shields.io/badge/Self--Hosted-Local_AI-f59e0b?style=flat-square) ![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square) ![Next.js](https://img.shields.io/badge/Next.js-16-black?style=flat-square) ![Tests](https://img.shields.io/badge/Tests-105_passing-22c55e?style=flat-square)
 
@@ -30,7 +30,7 @@ Everything runs on your machine. No cloud, no accounts, no telemetry.
 
 Most agent dashboards show you status. OpenClaw Mission Control shows you *history* — the complete, unambiguous record of what was decided, why, and what changed as a result. It's built for solo founders and small teams running OpenClaw who need accountability without complexity.
 
-**Zero additional infrastructure.** No database, no external services. Mission Control reads directly from OpenClaw's session files, workspace, and gateway API. If Mission Control goes down, your agents keep running untouched.
+**Zero infrastructure weight.** Mission Control is intentionally thin — a read layer, not a data layer. There is no database to provision, no schema to migrate, no daemon to babysit. It reads directly from OpenClaw's session files, workspace, and gateway API. If Mission Control goes down, your agents keep running untouched.
 
 **Local-first.** Everything stays on your machine. Point it at a different OpenClaw setup with a single env var.
 
