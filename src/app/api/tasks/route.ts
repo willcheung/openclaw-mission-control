@@ -257,19 +257,30 @@ async function handleDispatch(body: { taskId: number; agentId?: string }) {
 
 /* ── init handler ─────────────────────────────────── */
 
+async function backupIfExists(client: Awaited<ReturnType<typeof getClient>>, filePath: string): Promise<string | null> {
+  try {
+    const existing = await client.readFile(filePath);
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const backupPath = `${filePath}.${timestamp}.bak`;
+    await client.writeFile(backupPath, existing);
+    return backupPath;
+  } catch {
+    return null; // file doesn't exist, nothing to back up
+  }
+}
+
 async function handleInit(body: { starterTasks?: KanbanTask[] }) {
   const client = await getClient();
   const ws = await getDefaultWorkspace();
   const kanbanPath = join(ws, "kanban.json");
   const tasksMemoryPath = join(ws, "TASKS.md");
+  const backed: string[] = [];
 
-  // Ensure workspace directory exists via mkdir through exec
-  try {
-    const dir = dirname(kanbanPath);
-    // Use the client to create the directory if needed
-    // Try writing to kanban first; if the dir doesn't exist the write will error,
-    // but the gateway transport handles directory creation internally.
-  } catch { /* continue */ }
+  // Back up existing files before overwriting
+  const kanbanBackup = await backupIfExists(client, kanbanPath);
+  if (kanbanBackup) backed.push(kanbanBackup);
+  const tasksBackup = await backupIfExists(client, tasksMemoryPath);
+  if (tasksBackup) backed.push(tasksBackup);
 
   // ── 1. Create kanban.json with smart starter tasks ──
 
@@ -381,6 +392,7 @@ If you are executing a dispatched task, update \`dispatchStatus\` to \`"complete
     ok: true,
     kanbanPath,
     tasksMemoryPath,
+    backedUp: backed.length > 0 ? backed : undefined,
     board: { ...starterBoard, _fileExists: true },
   });
 }
