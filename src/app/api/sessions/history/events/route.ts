@@ -17,8 +17,6 @@ export const dynamic = "force-dynamic";
 const MAX_PAGE_SIZE = 200;
 const DEFAULT_PAGE_SIZE = 100;
 
-// ── Types matching OpenClaw JSONL schema ─────────────────────────────────────
-
 type RawEvent = Record<string, unknown>;
 
 type ParsedEvent = {
@@ -27,7 +25,6 @@ type ParsedEvent = {
   id: string;
   parentId: string | null;
   timestamp: string | null;
-  // Derived / enriched fields for UI
   role?: string;
   textContent?: string;
   thinking?: string;
@@ -60,8 +57,6 @@ type TokenUsage = {
   total: number;
 };
 
-// ── Path safety ──────────────────────────────────────────────────────────────
-
 function safeResolvePath(encodedId: string): string | null {
   let decoded: string;
   try {
@@ -74,14 +69,11 @@ function safeResolvePath(encodedId: string): string | null {
   const allowedBase = join(home, "agents");
   const resolved = resolve(decoded);
 
-  // Must be inside ~/.openclaw/agents/ and end in .jsonl
   if (!resolved.startsWith(allowedBase + "/")) return null;
   if (!resolved.endsWith(".jsonl")) return null;
 
   return resolved;
 }
-
-// ── Event parsing ────────────────────────────────────────────────────────────
 
 function parseEvent(raw: RawEvent): ParsedEvent {
   const type = String(raw.type ?? "unknown");
@@ -115,7 +107,6 @@ function parseEvent(raw: RawEvent): ParsedEvent {
             args: (part.arguments as Record<string, unknown>) ?? {},
           });
         } else if (part.type === "toolResult") {
-          // inline tool result
           const resultContent = part.content;
           let contentStr = "";
           if (Array.isArray(resultContent)) {
@@ -139,8 +130,6 @@ function parseEvent(raw: RawEvent): ParsedEvent {
       if (textParts.length) event.textContent = textParts.join("\n");
       if (toolCalls.length) event.toolCalls = toolCalls;
       if (toolResults.length) event.toolResults = toolResults;
-
-      // tool_result role (separate message with role: toolResult)
     } else if (msg.role === "toolResult") {
       const contentArr = msg.content as Record<string, unknown>[] | undefined;
       if (Array.isArray(contentArr)) {
@@ -162,7 +151,6 @@ function parseEvent(raw: RawEvent): ParsedEvent {
       ];
     }
 
-    // Usage (present on assistant messages)
     const usage = msg.usage as Record<string, unknown> | undefined;
     if (usage) {
       event.usage = {
@@ -179,7 +167,6 @@ function parseEvent(raw: RawEvent): ParsedEvent {
     event.modelId = typeof raw.modelId === "string" ? raw.modelId : undefined;
     event.provider = typeof raw.provider === "string" ? raw.provider : undefined;
   } else if (type === "tool_call") {
-    // Some formats emit standalone tool_call events
     event.toolCalls = [
       {
         id: String(raw.id ?? ""),
@@ -209,8 +196,6 @@ function parseEvent(raw: RawEvent): ParsedEvent {
 
   return event;
 }
-
-// ── Route handler ─────────────────────────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -247,9 +232,7 @@ export async function GET(request: NextRequest) {
     try {
       const obj = JSON.parse(line) as RawEvent;
       allEvents.push(parseEvent(obj));
-    } catch {
-      // skip malformed lines
-    }
+    } catch { /* skip malformed lines */ }
   }
 
   const total = allEvents.length;

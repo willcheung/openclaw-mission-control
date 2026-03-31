@@ -3,7 +3,7 @@
  *
  * Lists all JSONL session files across all agents in ~/.openclaw/agents/
  * Returns metadata: agent, session ID, file path (base64), size, mtime,
- * first/last event timestamps, approximate event count.
+ * first/last event timestamps, approximate event count, summary, toolNames.
  */
 
 import { NextResponse } from "next/server";
@@ -14,19 +14,20 @@ import { getOpenClawHome } from "@/lib/paths";
 export const dynamic = "force-dynamic";
 
 type SessionFileMeta = {
-  id: string; // base64url-encoded absolute path (used as a stable key)
+  id: string;
   agent: string;
-  sessionId: string; // extracted from filename
+  sessionId: string;
   filename: string;
   sizeBytes: number;
   mtimeMs: number;
   firstEventTs: string | null;
   lastEventTs: string | null;
   model: string | null;
-  eventCount: number; // approximate (newline count)
+  eventCount: number;
+  summary: string | null;
+  toolNames: string[];
 };
 
-/** Read the first N bytes of a file. */
 async function readHead(path: string, maxBytes = 4096): Promise<string> {
   const fh = await open(path, "r");
   try {
@@ -38,7 +39,6 @@ async function readHead(path: string, maxBytes = 4096): Promise<string> {
   }
 }
 
-/** Read the last N bytes of a file. */
 async function readTail(path: string, maxBytes = 4096): Promise<string> {
   const s = await stat(path);
   if (s.size <= maxBytes) return readFile(path, "utf-8");
@@ -60,9 +60,7 @@ function firstJsonlTs(text: string): string | null {
     try {
       const obj = JSON.parse(trimmed) as Record<string, unknown>;
       if (typeof obj.timestamp === "string") return obj.timestamp;
-    } catch {
-      // skip
-    }
+    } catch { /* skip */ }
   }
   return null;
 }
@@ -75,9 +73,7 @@ function lastJsonlTs(text: string): string | null {
     try {
       const obj = JSON.parse(trimmed) as Record<string, unknown>;
       if (typeof obj.timestamp === "string") return obj.timestamp;
-    } catch {
-      // skip
-    }
+    } catch { /* skip */ }
   }
   return null;
 }
@@ -91,9 +87,7 @@ function firstJsonlModel(text: string): string | null {
       if (obj.type === "model_change" && typeof obj.modelId === "string") {
         return obj.modelId as string;
       }
-    } catch {
-      // skip
-    }
+    } catch { /* skip */ }
   }
   return null;
 }
@@ -106,6 +100,74 @@ function approximateLineCount(text: string): number {
 
 function encodeId(path: string): string {
   return Buffer.from(path).toString("base64url");
+}
+
+/**
+ * Extract the first user message text from JSONL head as a session summary.
+ * Returns null if no user message found. Truncated to 120 chars.
+ */
+function extractSummary(text: string): string | null {
+  for (const line of text.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try {
+      const obj = JSON.parse(trimmed) as Record<string, unknown>;
+      if (obj.type !== "message") continue;
+      const msg = obj.message as Record<string, unknown> | undefined;
+      if (!msg || msg.role !== "user") continue;
+      const content = msg.content;
+      if (typeof content === "string") {
+        return content.length > 120 ? content.slice(0, 120) + "…" : content;
+      }
+      if (Array.isArray(content)) {
+        const textParts = (content as Record<string, unknown>[])
+          .filter((c) => c.type === "text" && typeof c.text === "string")
+          .map((c) => String(c.text));
+        const joined = textParts.join(" ");
+        if (joined) return joined.length > 120 ? joined.slice(0, 120) + "…" : joined;
+      }
+    } catch { /* skip */ }
+  }
+  return null;
+}
+
+/**
+ * Extract unique tool names from the JSONL text (up to 5).
+ */
+function extractToolNames(text: string): string[] {
+  const names = new Set<string>();
+  for (const line of text.split("\n")) {
+    if (names.size >= 5) break;
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try {
+      const obj = JSON.parse(trimmed) as Record<string, unknown>;
+      if (obj.type === "tool_call" && typeof obj.name === "string") {
+        names.add(obj.name);
+        continue;
+      }
+      if (obj.type === "message") {
+        const msg = obj.message as Record<string, unknown> | undefined;
+        if (!msg) continue;
+        const content = msg.content;
+        if (Array.isArray(content)) {
+          for (const part of content as Record<string, unknown>[]) {
+            if (part.type === "toolCall" && typeof part.name === "string") {
+              names.add(part.name);
+            }
+            if (part.type === "tool_use" && typeof part.name === "string") {
+              names.add(part.name);
+            }
+          }
+        }
+      }
+    } catch { /* skip */ }
+  }
+  return Array.from(names).slice(0, 5);
+}
+
+function lastTailTs(tail: string, head: string): string | null {
+  return lastJsonlTs(tail) ?? lastJsonlTs(head);
 }
 
 export async function GET() {
@@ -144,16 +206,17 @@ export async function GET() {
               if (s.size === 0) return;
 
               const [headText, tailText] = await Promise.all([
-                readHead(filePath, 8192),
-                s.size > 8192 ? readTail(filePath, 4096) : Promise.resolve(""),
+                readHead(filePath, 16384),
+                s.size > 16384 ? readTail(filePath, 4096) : Promise.resolve(""),
               ]);
 
               const tailForTs = tailText || headText;
               const firstTs = firstJsonlTs(headText);
               const lastTs = lastTailTs(tailForTs, headText);
               const model = firstJsonlModel(headText);
+              const summary = extractSummary(headText);
+              const toolNames = extractToolNames(headText + tailText);
 
-              // Extract session UUID from filename (strip topic suffix if present)
               const sessionId = basename(filename, ".jsonl").split("-topic-")[0];
 
               sessionMetas.push({
@@ -167,16 +230,15 @@ export async function GET() {
                 lastEventTs: lastTs,
                 model,
                 eventCount: approximateLineCount(headText + tailText),
+                summary,
+                toolNames,
               });
-            } catch {
-              // skip unreadable files
-            }
+            } catch { /* skip unreadable files */ }
           })
         );
       })
     );
 
-    // Sort newest first (by mtime)
     sessionMetas.sort((a, b) => b.mtimeMs - a.mtimeMs);
 
     return NextResponse.json({ sessions: sessionMetas });
@@ -184,9 +246,4 @@ export async function GET() {
     console.error("sessions/history GET error:", err);
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
-}
-
-/** Get the last timestamp, preferring tail over head. */
-function lastTailTs(tail: string, head: string): string | null {
-  return lastJsonlTs(tail) ?? lastJsonlTs(head);
 }
