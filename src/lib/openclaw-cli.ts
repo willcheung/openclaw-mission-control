@@ -1,6 +1,7 @@
 import { execFile, spawn } from "child_process";
 import { promisify } from "util";
 import { getOpenClawBin } from "./paths";
+import { stripAnsi } from "@/lib/ansi";
 
 const exec = promisify(execFile);
 
@@ -131,14 +132,6 @@ export async function runCli(
   } finally {
     releaseCliSlot();
   }
-}
-
-const ANSI_ESCAPE_PATTERN =
-  // Matches CSI and related ANSI escape sequences.
-  /\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g;
-
-function stripAnsi(value: string): string {
-  return value.replace(ANSI_ESCAPE_PATTERN, "");
 }
 
 function parseJsonCandidate<T>(value: string): T | null {
