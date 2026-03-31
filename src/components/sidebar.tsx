@@ -2,27 +2,19 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState, useCallback, useSyncExternalStore, useRef } from "react";
+import { Suspense, useEffect, useState, useCallback, useRef } from "react";
 import { cn } from "@/lib/utils";
 import {
-  Activity,
   LayoutDashboard,
   ListChecks,
   Clock,
-  Calendar,
-  MessageSquare,
   Brain,
   FolderOpen,
-  Settings,
   Wrench,
-  MessageCircle,
   Terminal,
   SquareTerminal,
-  Cpu,
-  Volume2,
   Database,
   Users,
-  Users2,
   BarChart3,
   Menu,
   X,
@@ -30,20 +22,13 @@ import {
   Package,
   ChevronRight,
   ChevronLeft,
-  Waypoints,
-  Globe,
   KeyRound,
-  Search,
   Heart,
   Settings2,
   Webhook,
   Stethoscope,
-  HelpCircle,
-  Puzzle,
-  Radio,
   ScrollText,
 } from "lucide-react";
-import { getChatUnreadCount, subscribeChatStore } from "@/lib/chat-store";
 
 type NavItem = {
   section: string;
@@ -63,22 +48,14 @@ const defaultNavItems: NavItem[] = [
   // ── Overview ──
   { group: "Overview", section: "dashboard", label: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
   { section: "timeline", label: "Timeline", icon: ScrollText, href: "/timeline" },
-  { section: "activity", label: "Activity", icon: Activity, href: "/activity" },
   { section: "usage", label: "Usage", icon: BarChart3, href: "/usage" },
   // ── Agents ──
   { group: "Agents", section: "agents", label: "Agents", icon: Users, href: "/agents" },
-  { section: "agents", label: "Subagents", icon: Users2, href: "/agents?tab=subagents", tab: "subagents", isSubItem: true },
-  { section: "agents", label: "Models", icon: Cpu, href: "/agents?tab=models", tab: "models", isSubItem: true },
-  { section: "chat", label: "Chat", icon: MessageCircle, href: "/chat" },
-  { section: "sessions", label: "Sessions", icon: MessageSquare, href: "/sessions" },
   // ── Work ──
   { group: "Work", section: "tasks", label: "Tasks", icon: ListChecks, href: "/tasks" },
-  ...(!isAgentbayHosting ? [{ section: "calendar", label: "Calendar", icon: Calendar, href: "/calendar", beta: true } as NavItem] : []),
-  ...(!isAgentbayHosting ? [{ section: "integrations", label: "Integrations", icon: Puzzle, href: "/integrations", beta: true } as NavItem] : []),
   { section: "cron", label: "Cron Jobs", icon: Clock, href: "/cron" },
   { section: "cron", label: "Heartbeat", icon: Heart, href: "/heartbeat", tab: "heartbeat", isSubItem: true },
   { section: "skills", label: "Skills", icon: Wrench, href: "/skills" },
-  { section: "skills", label: "ClawHub", icon: Package, href: "/skills?tab=clawhub", tab: "clawhub", isSubItem: true },
   // ── Knowledge ──
   { group: "Knowledge", section: "memory", label: "Memory", icon: Brain, href: "/memory" },
   { section: "docs", label: "Documents", icon: FolderOpen, href: "/documents" },
@@ -86,7 +63,6 @@ const defaultNavItems: NavItem[] = [
   // ── Configure ──
   { section: "env", label: "Env Vars", icon: KeyRound, href: "/env" },
   { section: "accounts", label: "API Keys", icon: KeyRound, href: "/accounts" },
-  { section: "channels", label: "Channels", icon: Radio, href: "/channels" },
   { section: "security", label: "Security", icon: ShieldCheck, href: "/security" },
   { section: "hooks", label: "Hooks", icon: Webhook, href: "/hooks" },
   { section: "settings", label: "Preferences", icon: Settings2, href: "/settings" },
@@ -94,29 +70,18 @@ const defaultNavItems: NavItem[] = [
   ...(!isAgentbayHosting ? [{ section: "doctor", label: "Doctor", icon: Stethoscope, href: "/doctor", group: "System", beta: true } as NavItem] : []),
   { group: isAgentbayHosting ? "System" : undefined, section: "terminal", label: "Terminal", icon: SquareTerminal, href: "/terminal" },
   { section: "logs", label: "Logs", icon: Terminal, href: "/logs" },
-  { section: "browser", label: "Browser Relay", icon: Globe, href: "/browser" },
-  { section: "audio", label: "Audio & Voice", icon: Volume2, href: "/audio" },
-  { section: "search", label: "Web Search", icon: Search, href: "/search" },
-  ...(!isAgentbayHosting ? [{ section: "tailscale", label: "Tailscale", icon: Waypoints, href: "/tailscale", beta: true } as NavItem] : []),
-  { section: "config", label: "Config", icon: Settings, href: "/config" },
 ];
 
 const hostedNavItems: NavItem[] = [
   // ── Core ──
-  { group: "Core", section: "chat", label: "Chat", icon: MessageCircle, href: "/chat" },
-  { section: "channels", label: "Channels", icon: Radio, href: "/channels" },
-  { section: "tasks", label: "Tasks", icon: ListChecks, href: "/tasks" },
+  { group: "Core", section: "tasks", label: "Tasks", icon: ListChecks, href: "/tasks" },
   { section: "skills", label: "Skills", icon: Wrench, href: "/skills" },
   { section: "accounts", label: "API Keys", icon: KeyRound, href: "/accounts" },
-  { section: "help", label: "Help & Support", icon: HelpCircle, href: "/help" },
   // ── Overview ──
   { group: "Overview", section: "dashboard", label: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
-  { section: "activity", label: "Activity", icon: Activity, href: "/activity" },
   { section: "usage", label: "Usage", icon: BarChart3, href: "/usage" },
   // ── Agents ──
   { group: "Agents", section: "agents", label: "Agents", icon: Users, href: "/agents" },
-  { section: "agents", label: "Models", icon: Cpu, href: "/agents?tab=models", tab: "models", isSubItem: true },
-  { section: "sessions", label: "Sessions", icon: MessageSquare, href: "/sessions" },
   // ── Work ──
   { group: "Work", section: "cron", label: "Cron Jobs", icon: Clock, href: "/cron" },
   // ── Knowledge ──
@@ -125,18 +90,12 @@ const hostedNavItems: NavItem[] = [
   // ── Configure ──
   { group: "Configure", section: "settings", label: "Preferences", icon: Settings2, href: "/settings" },
   // ── Advanced ──
-  { group: "Advanced", section: "agents", label: "Subagents", icon: Users2, href: "/agents?tab=subagents", tab: "subagents" },
-  { section: "skills", label: "ClawHub", icon: Package, href: "/skills?tab=clawhub", tab: "clawhub", group: "Advanced" },
   { section: "cron", label: "Heartbeat", icon: Heart, href: "/heartbeat", tab: "heartbeat", group: "Advanced" },
   { section: "vectors", label: "Vector DB", icon: Database, href: "/vectors", group: "Advanced" },
   { section: "security", label: "Security", icon: ShieldCheck, href: "/security", group: "Advanced" },
   { section: "hooks", label: "Hooks", icon: Webhook, href: "/hooks", group: "Advanced" },
   { section: "terminal", label: "Terminal", icon: SquareTerminal, href: "/terminal", group: "Advanced" },
   { section: "logs", label: "Logs", icon: Terminal, href: "/logs", group: "Advanced" },
-  { section: "browser", label: "Browser Relay", icon: Globe, href: "/browser", group: "Advanced" },
-  { section: "audio", label: "Audio & Voice", icon: Volume2, href: "/audio", group: "Advanced" },
-  { section: "search", label: "Web Search", icon: Search, href: "/search", group: "Advanced" },
-  { section: "config", label: "Config", icon: Settings, href: "/config", group: "Advanced" },
 ];
 
 const navItems = isAgentbayHosting ? hostedNavItems : defaultNavItems;
@@ -161,17 +120,12 @@ function deriveSectionFromPath(pathname: string): string | null {
     memories: "memory",
     permissions: "security",
     heartbeat: "cron",
-    models: "agents",
   };
   if (aliases[first]) return aliases[first];
   const known = new Set([
     "dashboard",
-    "chat",
     "agents",
     "tasks",
-    "calendar",
-    "integrations",
-    "sessions",
     "cron",
     "heartbeat",
     "memory",
@@ -179,21 +133,13 @@ function deriveSectionFromPath(pathname: string): string | null {
     "vectors",
     "skills",
     "accounts",
-    "channels",
-    "audio",
-    "browser",
-    "search",
-    "tailscale",
     "security",
-    "permissions",
     "hooks",
     "doctor",
     "usage",
     "terminal",
     "logs",
-    "config",
     "settings",
-    "activity",
     "timeline",
     "env",
     "help",
@@ -205,7 +151,6 @@ function deriveTabFromPath(pathname: string): string | null {
   if (!pathname || pathname === "/") return null;
   const first = pathname.split("/").filter(Boolean)[0] || "";
   if (first === "heartbeat") return "heartbeat";
-  if (first === "models") return "models";
   return null;
 }
 
@@ -221,30 +166,14 @@ function SidebarNav({ onNavigate, collapsed }: { onNavigate?: () => void; collap
     ? "skills"
     : sectionFromPath || sectionFromQuery;
   const tab = isSkillDetailRoute ? "skills" : (tabFromPath ?? tabFromQuery);
-  const [skillsExpanded, setSkillsExpanded] = useState(false);
-  const [agentsExpanded, setAgentsExpanded] = useState(false);
   const [cronExpanded, setCronExpanded] = useState(false);
   const [advancedExpanded, setAdvancedExpanded] = useState(false);
-  const isClawHubActive = section === "skills" && tab === "clawhub";
-  const showSkillsChildren = isClawHubActive ? true : skillsExpanded;
-  const isSubagentsActive = section === "agents" && tab === "subagents";
-  const isModelsActive = section === "agents" && tab === "models";
-  const showAgentsChildren = isSubagentsActive || isModelsActive ? true : agentsExpanded;
   const isHeartbeatActive = section === "cron" && tab === "heartbeat";
   const showCronChildren = isHeartbeatActive ? true : cronExpanded;
-
-  // Subscribe to chat unread count reactively
-  const chatUnread = useSyncExternalStore(
-    subscribeChatStore,
-    getChatUnreadCount,
-    () => 0 // SSR fallback
-  );
 
   return (
     <nav className={cn("flex flex-1 flex-col gap-0.5 overflow-y-auto pt-2", collapsed ? "px-2" : "px-3")}>
       {navItems.map((item, index) => {
-        const isSkillsParent = item.section === "skills" && item.label === "Skills";
-        const isAgentsParent = item.section === "agents" && item.label === "Agents";
         const isCronParent = item.section === "cron" && item.label === "Cron Jobs";
         const isAdvancedItem = isAgentbayHosting && item.group === "Advanced";
         const previousGroup = index > 0 ? navItems[index - 1]?.group : undefined;
@@ -253,33 +182,23 @@ function SidebarNav({ onNavigate, collapsed }: { onNavigate?: () => void; collap
         const isActive =
           !item.comingSoon &&
           section === item.section &&
-          (item.tab
-            ? tab === item.tab
-            : (item.section !== "skills" || tab !== "clawhub") &&
-              (item.section !== "agents" || (tab !== "subagents" && tab !== "models")));
+          (item.tab ? tab === item.tab : true);
         const tourId =
           !item.isSubItem && item.section === "dashboard"
             ? "nav-dashboard"
-            : !item.isSubItem && item.section === "chat"
-              ? "nav-chat"
-              : !item.isSubItem && item.section === "tasks"
-                ? "nav-tasks"
-                : !item.isSubItem && item.section === "skills" && item.label === "Skills"
-                  ? "nav-skills"
-                  : !item.isSubItem && item.section === "accounts"
-                    ? "nav-accounts"
-                    : !item.isSubItem && item.section === "channels"
-                      ? "nav-channels"
-                      : undefined;
+            : !item.isSubItem && item.section === "tasks"
+              ? "nav-tasks"
+              : !item.isSubItem && item.section === "skills" && item.label === "Skills"
+                ? "nav-skills"
+                : !item.isSubItem && item.section === "accounts"
+                  ? "nav-accounts"
+                  : undefined;
 
         if (collapsed && item.isSubItem) return null;
-        if (item.isSubItem && item.section === "skills" && !showSkillsChildren) return null;
-        if (item.isSubItem && item.section === "agents" && !showAgentsChildren) return null;
         if (item.isSubItem && item.section === "cron" && !showCronChildren) return null;
         const shouldHideAdvancedItem = isAdvancedItem && !advancedExpanded && !isActive;
         if (shouldHideAdvancedItem && !showGroupHeader) return null;
 
-        const showBadge = item.section === "chat" && chatUnread > 0;
         const isDisabled = item.comingSoon;
         const linkClass = cn(
           "group relative flex items-center gap-2 rounded-md py-1.5 text-xs font-medium transition-colors duration-150",
@@ -326,7 +245,7 @@ function SidebarNav({ onNavigate, collapsed }: { onNavigate?: () => void; collap
                 )}
               </span>
             ) : (
-              (isSkillsParent || isAgentsParent || isCronParent) && !collapsed ? (
+              isCronParent && !collapsed ? (
                 <div className={linkClass} data-tour={tourId}>
                   <Link
                     href={item.href || `/${item.section}`}
@@ -341,27 +260,15 @@ function SidebarNav({ onNavigate, collapsed }: { onNavigate?: () => void; collap
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      if (isSkillsParent) {
-                        setSkillsExpanded((prev) => !prev);
-                      } else if (isAgentsParent) {
-                        setAgentsExpanded((prev) => !prev);
-                      } else {
-                        setCronExpanded((prev) => !prev);
-                      }
+                      setCronExpanded((prev) => !prev);
                     }}
                     className="rounded-md p-1.5 text-foreground/60 transition-colors hover:text-foreground"
-                    aria-label={
-                      isSkillsParent
-                        ? (showSkillsChildren ? "Collapse skills submenu" : "Expand skills submenu")
-                        : isAgentsParent
-                          ? (showAgentsChildren ? "Collapse agents submenu" : "Expand agents submenu")
-                          : (showCronChildren ? "Collapse cron submenu" : "Expand cron submenu")
-                    }
+                    aria-label={showCronChildren ? "Collapse cron submenu" : "Expand cron submenu"}
                   >
                     <ChevronRight
                       className={cn(
                         "h-3 w-3 shrink-0 transition-transform duration-200",
-                        (isSkillsParent ? showSkillsChildren : isAgentsParent ? showAgentsChildren : showCronChildren) && "rotate-90"
+                        showCronChildren && "rotate-90"
                       )}
                     />
                   </button>
@@ -374,21 +281,11 @@ function SidebarNav({ onNavigate, collapsed }: { onNavigate?: () => void; collap
                   data-tour={tourId}
                   title={collapsed ? item.label : undefined}
                 >
-                  <span className="relative inline-flex shrink-0">
-                    <Icon className="h-3 w-3" />
-                    {collapsed && showBadge && (
-                    <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-stone-900 ring-2 ring-sidebar dark:bg-stone-100" title={`${chatUnread} unread`} aria-hidden />
-                  )}
-                </span>
-                {!collapsed && <span className="flex-1">{item.label}</span>}
-                {!collapsed && item.beta && (
+                  <Icon className="h-3 w-3 shrink-0" />
+                  {!collapsed && <span className="flex-1">{item.label}</span>}
+                  {!collapsed && item.beta && (
                     <span className="shrink-0 rounded-sm bg-stone-100 px-1.5 py-0.5 font-mono text-xs font-semibold uppercase tracking-wider text-stone-400 dark:bg-[#1c2128] dark:text-[#5a6270]">
                       beta
-                    </span>
-                  )}
-                {!collapsed && showBadge && (
-                    <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-stone-900 px-1.5 text-xs font-bold text-white shadow-sm dark:bg-stone-100 dark:text-stone-900">
-                      {chatUnread > 9 ? "9+" : chatUnread}
                     </span>
                   )}
                 </Link>

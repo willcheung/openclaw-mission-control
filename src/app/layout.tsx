@@ -5,7 +5,7 @@ import { Sidebar } from "@/components/sidebar";
 import { Header, AgentChatPanel } from "@/components/header";
 import { KeyboardShortcuts } from "@/components/keyboard-shortcuts";
 import { ThemeProvider } from "@/components/theme-provider";
-import { ChatNotificationToast } from "@/components/chat-notification-toast";
+
 
 import { SetupGate } from "@/components/setup-gate";
 import { UsageAlertMonitor } from "@/components/usage-alert-monitor";
@@ -130,7 +130,7 @@ export default function RootLayout({
             </div>
             <DashboardTourGate />
             <AgentChatPanel />
-            <ChatNotificationToast />
+
             {!isHosted && <OpenClawUpdateBanner />}
             {!isHosted && <MissionControlUpdateBanner />}
             <UsageAlertMonitor />

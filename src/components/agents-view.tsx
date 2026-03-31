@@ -60,8 +60,6 @@ import { cn } from "@/lib/utils";
 import { requestRestart } from "@/lib/restart-store";
 import { SectionBody, SectionHeader, SectionLayout } from "@/components/section-layout";
 import { InlineSpinner, LoadingState } from "@/components/ui/loading-state";
-import { SubagentsManagerView } from "@/components/subagents-manager-view";
-import { ModelsView } from "@/components/models-view";
 
 const POSITIONS_STORAGE_KEY = "mc-agents-node-positions";
 const AGENT_ORDER_STORAGE_KEY = "mc-agents-order";
@@ -4415,17 +4413,8 @@ function WorkspaceFilesModal({
 export function AgentsView() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  // Unified view mode: flow (org chart), grid (cards), subagents
-  type ViewMode = "flow" | "grid" | "subagents" | "models";
-  const initialView: ViewMode = (() => {
-    const t = (searchParams.get("tab") || "").toLowerCase();
-    if (t === "subagents") return "subagents";
-    if (t === "models") return "models";
-    return "flow";
-  })();
-  const [viewMode, setViewMode] = useState<ViewMode>(initialView);
-  // Derived helpers for backward compat
-  const tab: "agents" | "subagents" | "models" = viewMode === "subagents" ? "subagents" : viewMode === "models" ? "models" : "agents";
+  type ViewMode = "flow" | "grid";
+  const [viewMode, setViewMode] = useState<ViewMode>("flow");
   const view: "flow" | "grid" = viewMode === "grid" ? "grid" : "flow";
   const [data, setData] = useState<AgentsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -4565,38 +4554,16 @@ export function AgentsView() {
 
   const switchView = useCallback((next: ViewMode) => {
     setViewMode(next);
-    // Keep URL in sync for subagents/models tabs (bookmarkable)
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete("section");
-    if (next === "subagents") params.set("tab", "subagents");
-    else if (next === "models") params.set("tab", "models");
-    else params.delete("tab");
-    const query = params.toString();
-    router.push(query ? `/agents?${query}` : "/agents");
-  }, [router, searchParams]);
+  }, []);
 
   useEffect(() => {
-    if (viewMode === "subagents" || viewMode === "models") {
-      setShowAddModal(false);
-      setEditingAgentId(null);
-      setSelectedWorkspacePath(null);
-    } else if (viewMode !== "flow") {
+    if (viewMode !== "flow") {
       setSelectedWorkspacePath(null);
     }
   }, [viewMode]);
 
   const agentCount = data?.agents.length ?? 0;
-  const sectionDescription =
-    tab === "models"
-      ? "Manage providers, models, and fallbacks"
-      : tab === "subagents"
-        ? "Subagent orchestration, controls, and defaults"
-        : `${agentCount} agent${agentCount !== 1 ? "s" : ""} configured`;
-
-  // Models tab — delegate to ModelsView which has its own layout
-  if (tab === "models") {
-    return <ModelsView />;
-  }
+  const sectionDescription = `${agentCount} agent${agentCount !== 1 ? "s" : ""} configured`;
 
   if (loading) {
     return (
@@ -4638,8 +4605,6 @@ export function AgentsView() {
               {([
                 { key: "flow" as ViewMode, icon: GitFork, label: "Hierarchy" },
                 { key: "grid" as ViewMode, icon: LayoutGrid, label: "Cards" },
-                { key: "subagents" as ViewMode, icon: Network, label: "Subagents" },
-                { key: "models" as ViewMode, icon: Cpu, label: "Models" },
               ] as const).map(({ key, icon: Icon, label }) => (
                 <button
                   key={key}
@@ -4658,8 +4623,7 @@ export function AgentsView() {
               ))}
             </div>
 
-            {tab === "agents" && (
-              <button
+            <button
                 type="button"
                 onClick={() => setShowAddModal(true)}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-stone-900 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-stone-700 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-stone-300"
@@ -4667,7 +4631,6 @@ export function AgentsView() {
                 <Plus className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Add Agent</span>
               </button>
-            )}
 
             <button type="button" onClick={fetchAgents} className="inline-flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm font-medium text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700 dark:hover:text-stone-100">
               <RefreshCw className="h-3.5 w-3.5" />
@@ -4677,17 +4640,8 @@ export function AgentsView() {
         }
       />
 
-      {tab === "subagents" && (
-        <SubagentsManagerView
-          agents={data.agents}
-          onAgentsReload={() => {
-            void fetchAgents();
-          }}
-        />
-      )}
-
       {/* Flow view: full width, full remaining height */}
-      {tab === "agents" && view === "flow" && (
+      {view === "flow" && (
         <FlowView
           data={data}
           selectedId={selectedId}
@@ -4698,7 +4652,7 @@ export function AgentsView() {
       )}
 
       {/* Grid view + detail: scrollable with max-width */}
-      {tab === "agents" && view === "grid" && (
+      {view === "grid" && (
         <SectionBody width="content" padding="roomy" innerClassName="space-y-5">
           <SummaryBar agents={data.agents} />
           <GridView
@@ -4718,7 +4672,7 @@ export function AgentsView() {
       )}
 
       {/* Add Agent Modal */}
-      {tab === "agents" && showAddModal && (
+      {showAddModal && (
         <AddAgentModal
           onClose={() => setShowAddModal(false)}
           onCreated={() => {
@@ -4733,7 +4687,7 @@ export function AgentsView() {
       )}
 
       {/* Edit Agent Modal */}
-      {tab === "agents" && editingAgent && (
+      {editingAgent && (
         <EditAgentModal
           agent={editingAgent}
           idx={editingIdx}
@@ -4750,7 +4704,7 @@ export function AgentsView() {
         />
       )}
 
-      {tab === "agents" && selectedWorkspacePath && (
+      {selectedWorkspacePath && (
         <WorkspaceFilesModal
           workspacePath={selectedWorkspacePath}
           onClose={() => setSelectedWorkspacePath(null)}
