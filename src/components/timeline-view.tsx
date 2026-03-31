@@ -8,7 +8,7 @@
  * tool calls, model changes, file diffs.
  */
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   Cpu,
@@ -43,6 +43,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { stripAnsi } from "@/lib/ansi";
 import { SectionBody, SectionHeader, SectionLayout } from "@/components/section-layout";
 import { LoadingState } from "@/components/ui/loading-state";
 
@@ -70,7 +71,23 @@ type SessionMeta = {
   lastEventTs: string | null;
   model: string | null;
   eventCount: number;
+  summary: string | null;
+  toolNames: string[] | null;
 };
+
+type ActivityEvent = {
+  id: string;
+  type: "cron" | "session" | "log" | "system";
+  timestamp: number;
+  title: string;
+  detail?: string;
+  status?: "ok" | "error" | "info" | "warning";
+  source?: string;
+};
+
+type TimelineItem =
+  | { kind: "session"; data: SessionMeta; sortTs: number }
+  | { kind: "activity"; data: ActivityEvent; sortTs: number };
 
 type ToolCallSummary = {
   id: string;
@@ -160,51 +177,127 @@ function agentBadgeClass(agent: string): string {
   return map[agent] ?? "bg-stone-100 text-stone-600 dark:bg-stone-700/60 dark:text-stone-300";
 }
 
-// ── Session List ─────────────────────────────────────────────────────────────
+// ── Session List Item ────────────────────────────────────────────────────────
 
-function SessionList({
-  sessions,
+function SessionListItem({
+  session: s,
   selected,
   onSelect,
 }: {
-  sessions: SessionMeta[];
-  selected: string | null;
-  onSelect: (id: string) => void;
+  session: SessionMeta;
+  selected: boolean;
+  onSelect: () => void;
 }) {
+  const MAX_TOOLS = 4;
+  const tools = s.toolNames ?? [];
+  const shown = tools.slice(0, MAX_TOOLS);
+  const overflow = tools.length - MAX_TOOLS;
+
   return (
-    <div className="flex flex-col gap-1">
-      {sessions.map((s) => (
-        <button
-          key={s.id}
-          onClick={() => onSelect(s.id)}
+    <button
+      onClick={onSelect}
+      className={cn(
+        "flex flex-col gap-1 rounded-lg px-3 py-2.5 text-left text-sm transition-colors hover:bg-stone-100 dark:hover:bg-stone-800/60",
+        selected && "bg-stone-100 ring-1 ring-stone-200 dark:bg-stone-800/60 dark:ring-stone-700"
+      )}
+    >
+      {/* Row 1: agent badge + session id + time */}
+      <div className="flex items-center gap-2">
+        <span
           className={cn(
-            "flex flex-col gap-0.5 rounded-lg px-3 py-2.5 text-left text-sm transition-colors hover:bg-stone-100 dark:hover:bg-stone-800/60",
-            selected === s.id && "bg-stone-100 ring-1 ring-stone-200 dark:bg-stone-800/60 dark:ring-stone-700"
+            "inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-medium",
+            agentBadgeClass(s.agent)
           )}
         >
-          <div className="flex items-center gap-2">
+          {s.agent}
+        </span>
+        <span className="truncate font-mono text-xs text-stone-500 dark:text-stone-400">
+          {s.sessionId.slice(0, 8)}
+        </span>
+        <span className="ml-auto shrink-0 text-[11px] text-stone-400 dark:text-stone-500">
+          {timeAgo(s.lastEventTs ?? (s.mtimeMs ? new Date(s.mtimeMs).toISOString() : null))}
+        </span>
+      </div>
+
+      {/* Row 2: summary */}
+      {s.summary && (
+        <p className="line-clamp-2 text-xs leading-relaxed text-stone-600 dark:text-stone-400">
+          {s.summary}
+        </p>
+      )}
+
+      {/* Row 3: model + tool pills + size + events */}
+      <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-stone-400 dark:text-stone-500">
+        {s.model && <span>{s.model}</span>}
+        {shown.map((t) => {
+          const { color } = toolMeta(t);
+          return (
             <span
+              key={t}
               className={cn(
-                "inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-medium",
-                agentBadgeClass(s.agent)
+                "inline-flex items-center rounded-full bg-stone-100 px-1.5 py-0.5 font-mono text-[10px] dark:bg-stone-700/50",
+                color
               )}
             >
-              {s.agent}
+              {t}
             </span>
-            <span className="truncate font-mono text-xs text-stone-500 dark:text-stone-400">
-              {s.sessionId.slice(0, 8)}
+          );
+        })}
+        {overflow > 0 && (
+          <span className="text-[10px] text-stone-400 dark:text-stone-500">+{overflow}</span>
+        )}
+        <span>{formatBytes(s.sizeBytes)}</span>
+        <span>~{s.eventCount} lines</span>
+      </div>
+    </button>
+  );
+}
+
+// ── Activity Card ────────────────────────────────────────────────────────────
+
+function ActivityCard({ event }: { event: ActivityEvent }) {
+  const statusColors: Record<string, string> = {
+    ok: "border-l-emerald-500 bg-emerald-50/30 dark:bg-emerald-500/5",
+    error: "border-l-red-500 bg-red-50/30 dark:bg-red-500/5",
+    warning: "border-l-amber-500 bg-amber-50/30 dark:bg-amber-500/5",
+    info: "border-l-sky-500 bg-sky-50/30 dark:bg-sky-500/5",
+  };
+
+  const typeIcons: Record<string, LucideIcon> = {
+    cron: CalendarRange,
+    session: Activity,
+    log: Terminal,
+    system: Database,
+  };
+
+  const Icon = typeIcons[event.type] ?? Activity;
+  const colorClass = event.status ? statusColors[event.status] ?? "border-l-stone-300 dark:border-l-stone-600" : "border-l-stone-300 dark:border-l-stone-600";
+
+  return (
+    <div className={cn("flex items-start gap-3 rounded-lg border-l-2 px-3.5 py-2.5", colorClass)}>
+      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-stone-400 dark:text-stone-500" />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-stone-700 dark:text-stone-200">{event.title}</span>
+          {event.status && (
+            <span className={cn(
+              "rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase",
+              event.status === "ok" && "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
+              event.status === "error" && "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300",
+              event.status === "warning" && "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
+              event.status === "info" && "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300",
+            )}>
+              {event.status}
             </span>
-            <span className="ml-auto text-[11px] text-stone-400 dark:text-stone-500 shrink-0">
-              {timeAgo(s.lastEventTs ?? (s.mtimeMs ? new Date(s.mtimeMs).toISOString() : null))}
-            </span>
-          </div>
-          <div className="flex items-center gap-2 text-[11px] text-stone-400 dark:text-stone-500">
-            {s.model && <span>{s.model}</span>}
-            <span>{formatBytes(s.sizeBytes)}</span>
-            <span>~{s.eventCount} lines</span>
-          </div>
-        </button>
-      ))}
+          )}
+          <span className="ml-auto shrink-0 text-[11px] text-stone-400 dark:text-stone-500">
+            {timeAgo(new Date(event.timestamp).toISOString())}
+          </span>
+        </div>
+        {event.detail && (
+          <p className="mt-0.5 line-clamp-1 text-xs text-stone-500 dark:text-stone-400">{event.detail}</p>
+        )}
+      </div>
     </div>
   );
 }
@@ -339,7 +432,7 @@ function ToolCallBlock({ call }: { call: ToolCallSummary }) {
       {expanded && (
         <div className="border-t border-amber-200/70 px-3 py-2 dark:border-amber-500/10">
           <pre className="overflow-x-auto whitespace-pre-wrap text-[11px] text-stone-600 dark:text-stone-400">
-            {JSON.stringify(call.args, null, 2)}
+            {stripAnsi(JSON.stringify(call.args, null, 2))}
           </pre>
         </div>
       )}
@@ -349,7 +442,7 @@ function ToolCallBlock({ call }: { call: ToolCallSummary }) {
 
 function ToolResultBlock({ result }: { result: ToolResultSummary }) {
   const [expanded, setExpanded] = useState(false);
-  const content = result.diff ?? result.content;
+  const content = stripAnsi(result.diff ?? result.content);
   const preview = truncate(content.replace(/\n/g, " "), 80);
   const { icon: Icon, color } = toolMeta(result.toolName);
 
@@ -372,11 +465,11 @@ function ToolResultBlock({ result }: { result: ToolResultSummary }) {
         <div className="border-t border-stone-200/70 px-3 py-2 dark:border-stone-700/50">
           {result.diff ? (
             <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-stone-600 dark:text-stone-400">
-              {result.diff}
+              {content}
             </pre>
           ) : (
             <p className="whitespace-pre-wrap text-[11px] text-stone-600 dark:text-stone-400">
-              {result.content || "(empty)"}
+              {content || "(empty)"}
             </p>
           )}
         </div>
@@ -417,13 +510,13 @@ function EventCard({ event }: { event: ParsedEvent }) {
 
   if (isModelChange) {
     return (
-      <div className="flex items-center gap-2 py-1 text-[11px] text-stone-400 dark:text-stone-500">
-        <div className="h-px flex-1 bg-stone-200 dark:bg-stone-700/50" />
-        <Cpu className="h-3 w-3" />
-        <span>
+      <div className="flex items-center gap-2 py-1.5 text-[11px]">
+        <div className="h-px flex-1 bg-sky-200 dark:bg-sky-500/20" />
+        <Cpu className="h-3 w-3 text-sky-500 dark:text-sky-400" />
+        <span className="font-medium text-sky-600 dark:text-sky-400">
           {event.provider} / {event.modelId}
         </span>
-        <div className="h-px flex-1 bg-stone-200 dark:bg-stone-700/50" />
+        <div className="h-px flex-1 bg-sky-200 dark:bg-sky-500/20" />
       </div>
     );
   }
@@ -483,9 +576,11 @@ function EventCard({ event }: { event: ParsedEvent }) {
   return (
     <div
       className={cn(
-        "flex gap-2.5 rounded-lg px-3 py-3 transition-colors",
-        isUser && "bg-stone-100/70 dark:bg-stone-800/40",
-        isAssistant && "bg-white dark:bg-stone-800/20"
+        "flex gap-2.5 rounded-lg border-l-2 px-3 py-3 transition-colors",
+        isUser && "border-l-stone-400 bg-stone-100/70 dark:border-l-stone-500 dark:bg-stone-800/40",
+        isAssistant && "border-l-emerald-400 bg-white dark:border-l-emerald-500 dark:bg-stone-800/20",
+        isToolResult && "border-l-amber-400 dark:border-l-amber-500",
+        !isUser && !isAssistant && !isToolResult && "border-l-stone-200 dark:border-l-stone-700",
       )}
     >
       {/* Avatar */}
@@ -504,7 +599,7 @@ function EventCard({ event }: { event: ParsedEvent }) {
       {/* Content */}
       <div className="min-w-0 flex-1">
         {/* Header */}
-        <div className="mb-1 flex items-center gap-2">
+        <div className="mb-1.5 flex items-center gap-2">
           <span className="text-xs font-semibold text-stone-700 dark:text-stone-200">
             {isUser ? "user" : "assistant"}
           </span>
@@ -534,7 +629,7 @@ function EventCard({ event }: { event: ParsedEvent }) {
               <span className="text-purple-600 dark:text-purple-400">thinking</span>
               {!expanded && (
                 <span className="ml-1 text-purple-400/70 dark:text-purple-500/70">
-                  {truncate(event.thinking ?? "", 60)}
+                  {truncate(stripAnsi(event.thinking ?? ""), 60)}
                 </span>
               )}
               {expanded ? (
@@ -546,7 +641,7 @@ function EventCard({ event }: { event: ParsedEvent }) {
             {expanded && (
               <div className="border-t border-purple-200/70 px-3 py-2 dark:border-purple-500/10">
                 <p className="whitespace-pre-wrap text-xs italic text-purple-700 dark:text-purple-300">
-                  {event.thinking}
+                  {stripAnsi(event.thinking ?? "")}
                 </p>
               </div>
             )}
@@ -556,7 +651,7 @@ function EventCard({ event }: { event: ParsedEvent }) {
         {/* Text content */}
         {event.textContent && (
           <p className="whitespace-pre-wrap text-sm leading-relaxed text-stone-700 dark:text-stone-200">
-            {event.textContent}
+            {stripAnsi(event.textContent)}
           </p>
         )}
 
@@ -676,7 +771,7 @@ function EventsPanel({
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Sub-header */}
-      <div className="flex shrink-0 items-center gap-3 border-b border-stone-200 px-6 py-3 dark:border-stone-700/60">
+      <div className="sticky top-0 z-10 flex shrink-0 items-center gap-3 border-b border-stone-200 bg-stone-50 px-6 py-3 dark:border-stone-700/60 dark:bg-[#101214]">
         <button
           onClick={onBack}
           className="flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-800 dark:hover:text-stone-200"
@@ -687,7 +782,7 @@ function EventsPanel({
         <span className="text-stone-300 dark:text-stone-600">/</span>
         <span className="font-mono text-xs text-stone-500">{sessionId.slice(0, 16)}…</span>
         <span className="text-[11px] text-stone-400">{total} events</span>
-        <div className="ml-auto flex items-center gap-2 rounded-md border border-stone-200 bg-stone-50 px-2.5 py-1.5 dark:border-stone-700 dark:bg-stone-800/50">
+        <div className="ml-auto flex items-center gap-2 rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 dark:border-stone-700 dark:bg-stone-800/50">
           <Search className="h-3.5 w-3.5 text-stone-400" />
           <input
             type="text"
@@ -768,6 +863,8 @@ export function TimelineView() {
   const hasLoadedOnce = useRef(false);
   const refreshDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [activityEvents, setActivityEvents] = useState<ActivityEvent[]>([]);
+
   const fetchSessions = useCallback(async () => {
     try {
       const res = await fetch("/api/sessions/history", {
@@ -789,9 +886,21 @@ export function TimelineView() {
     }
   }, []);
 
+  const fetchActivity = useCallback(async () => {
+    try {
+      const res = await fetch("/api/activity", { cache: "no-store", signal: AbortSignal.timeout(10000) });
+      if (!res.ok) return;
+      const data = await res.json();
+      setActivityEvents(Array.isArray(data) ? data : []);
+    } catch {
+      // non-critical
+    }
+  }, []);
+
   useEffect(() => {
     fetchSessions();
-  }, [fetchSessions]);
+    fetchActivity();
+  }, [fetchSessions, fetchActivity]);
 
   // Live SSE subscription — refreshes session list when any .jsonl file changes
   useEffect(() => {
@@ -806,7 +915,7 @@ export function TimelineView() {
         if (event.path && isSessionFileEvent(event.path)) {
           // Debounce: coalesce rapid writes into a single refresh
           if (refreshDebounceRef.current) clearTimeout(refreshDebounceRef.current);
-          refreshDebounceRef.current = setTimeout(() => fetchSessions(), 500);
+          refreshDebounceRef.current = setTimeout(() => { fetchSessions(); fetchActivity(); }, 500);
         }
       } catch {
         // ignore malformed SSE frames
@@ -819,7 +928,7 @@ export function TimelineView() {
       es.close();
       if (refreshDebounceRef.current) clearTimeout(refreshDebounceRef.current);
     };
-  }, [fetchSessions]);
+  }, [fetchSessions, fetchActivity]);
 
   const agents = Array.from(new Set(sessions.map((s) => s.agent))).sort();
 
@@ -830,7 +939,8 @@ export function TimelineView() {
       if (
         !s.sessionId.toLowerCase().includes(q) &&
         !(s.model ?? "").toLowerCase().includes(q) &&
-        !s.agent.toLowerCase().includes(q)
+        !s.agent.toLowerCase().includes(q) &&
+        !(s.summary ?? "").toLowerCase().includes(q)
       )
         return false;
     }
@@ -841,6 +951,23 @@ export function TimelineView() {
   });
 
   const selectedSession = sessions.find((s) => s.id === selectedId);
+
+  const merged: TimelineItem[] = useMemo(() => {
+    const items: TimelineItem[] = [];
+    for (const s of filtered) {
+      const ts = s.lastEventTs ? new Date(s.lastEventTs).getTime() : s.mtimeMs;
+      items.push({ kind: "session", data: s, sortTs: ts });
+    }
+    for (const a of activityEvents) {
+      if (agentFilter !== "all" && a.source && !a.source.toLowerCase().includes(agentFilter)) continue;
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        if (!a.title.toLowerCase().includes(q) && !(a.detail ?? "").toLowerCase().includes(q)) continue;
+      }
+      items.push({ kind: "activity", data: a, sortTs: a.timestamp });
+    }
+    return items.sort((a, b) => b.sortTs - a.sortTs);
+  }, [filtered, activityEvents, agentFilter, searchQuery]);
 
   return (
     <SectionLayout>
@@ -872,7 +999,7 @@ export function TimelineView() {
               {liveStatus === "live" ? "Live" : liveStatus === "connecting" ? "Connecting…" : "Disconnected"}
             </span>
             <button
-              onClick={() => { setLoading(true); fetchSessions(); }}
+              onClick={() => { setLoading(true); fetchSessions(); fetchActivity(); }}
               className="flex items-center gap-1.5 rounded-md border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-stone-600 shadow-sm transition hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
             >
               <RefreshCw className="h-3.5 w-3.5" />
@@ -946,7 +1073,7 @@ export function TimelineView() {
                 )}
               </div>
               <span className="text-xs text-stone-400">
-                {filtered.length} sessions
+                {merged.length} events
               </span>
             </div>
 
@@ -956,7 +1083,7 @@ export function TimelineView() {
               {error && (
                 <p className="text-sm text-red-500">{error}</p>
               )}
-              {!loading && !error && filtered.length === 0 && (
+              {!loading && !error && merged.length === 0 && (
                 <div className="flex flex-col items-center gap-2 py-12 text-stone-400">
                   <FileText className="h-8 w-8 opacity-40" />
                   <p className="text-sm">
@@ -966,12 +1093,21 @@ export function TimelineView() {
                   </p>
                 </div>
               )}
-              {!loading && !error && filtered.length > 0 && (
-                <SessionList
-                  sessions={filtered}
-                  selected={selectedId}
-                  onSelect={setSelectedId}
-                />
+              {!loading && !error && merged.length > 0 && (
+                <div className="flex flex-col gap-1.5">
+                  {merged.map((item) =>
+                    item.kind === "session" ? (
+                      <SessionListItem
+                        key={item.data.id}
+                        session={item.data}
+                        selected={selectedId === item.data.id}
+                        onSelect={() => setSelectedId(item.data.id)}
+                      />
+                    ) : (
+                      <ActivityCard key={item.data.id} event={item.data} />
+                    )
+                  )}
+                </div>
               )}
             </div>
           </div>
