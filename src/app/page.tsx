@@ -5,35 +5,28 @@ type SearchParams = Record<string, string | string[] | undefined>;
 
 const SECTION_TO_PATH: Record<string, string> = {
   dashboard: "/dashboard",
-  chat: "/chat",
   agents: "/agents",
   tasks: "/tasks",
   cron: "/cron",
   heartbeat: "/heartbeat",
-  sessions: "/sessions",
   system: "/dashboard",
   memory: "/memory",
   memories: "/memory",
   docs: "/documents",
   documents: "/documents",
-  config: "/config",
-  settings: "/config",
+  settings: "/settings",
   skills: "/skills",
-  models: "/agents?tab=models",
   accounts: "/accounts",
-  channels: "/channels",
-  audio: "/audio",
   vectors: "/vectors",
   logs: "/logs",
   usage: "/usage",
   terminal: "/terminal",
   security: "/security",
   permissions: "/permissions",
-  tailscale: "/tailscale",
-  browser: "/browser",
-  calendar: "/calendar",
-  integrations: "/integrations",
-  search: "/search",
+  hooks: "/hooks",
+  doctor: "/doctor",
+  timeline: "/timeline",
+  env: "/env",
   help: "/help",
 };
 
@@ -80,5 +73,5 @@ export default async function Home({
     redirect(suffix ? `${targetPath}?${suffix}` : targetPath);
   }
 
-  return <RouteSectionView section="chat" />;
+  return <RouteSectionView section="dashboard" />;
 }

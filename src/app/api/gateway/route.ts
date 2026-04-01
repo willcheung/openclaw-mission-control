@@ -67,24 +67,6 @@ function ensureResponsesEndpoint(): void {
   })();
 }
 
-/**
- * Wait for the in-flight responses endpoint setup to finish.
- * Called by the chat route to avoid racing with the fire-and-forget setup.
- */
-export async function waitForResponsesEndpoint(): Promise<void> {
-  if (_responsesSetupPromise) {
-    await _responsesSetupPromise;
-  }
-}
-
-/**
- * Trigger the responses endpoint setup if it hasn't been attempted yet.
- * Called by the chat route when a user sends a message before the gateway
- * health poll has fired (which normally triggers ensureResponsesEndpoint).
- */
-export function triggerResponsesEndpointSetup(): void {
-  ensureResponsesEndpoint();
-}
 
 async function runGatewayServiceCommand(
   subcommand: "restart" | "stop" | "start",

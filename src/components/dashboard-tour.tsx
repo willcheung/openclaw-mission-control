@@ -47,14 +47,6 @@ const TOUR_STEPS: TourStep[] = [
     placement: "right",
   },
   {
-    id: "chat",
-    title: "Chat Is Your Home Base",
-    description: "Start here to talk with your agent and validate setup quickly.",
-    target: "[data-tour='nav-chat']",
-    route: "/chat",
-    placement: "right",
-  },
-  {
     id: "tasks",
     title: "Automate Work",
     description: "Tasks and schedules let you run repeatable operations without manual steps.",
