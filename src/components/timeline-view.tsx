@@ -801,9 +801,9 @@ function EventsPanel({
   const items = virtualizer.getVirtualItems();
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
-      {/* Sub-header */}
-      <div className="sticky top-0 z-10 flex shrink-0 items-center gap-3 border-b border-stone-200 bg-stone-50 px-6 py-3 dark:border-stone-700/60 dark:bg-[#101214]">
+    <div className="flex h-full flex-col overflow-hidden -mx-6 -mt-6">
+      {/* Pinned sub-header */}
+      <div className="flex shrink-0 items-center gap-3 border-b border-stone-200 bg-stone-50 px-6 py-3 dark:border-stone-700/60 dark:bg-[#101214]">
         <button
           onClick={onBack}
           className="flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-800 dark:hover:text-stone-200"
