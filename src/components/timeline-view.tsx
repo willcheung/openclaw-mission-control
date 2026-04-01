@@ -255,7 +255,32 @@ function SessionListItem({
 
 // ── Activity Card ────────────────────────────────────────────────────────────
 
+/** Strip markdown formatting (bold, links, headers) for plain-text display. */
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/\*\*(.*?)\*\*/g, "$1")  // **bold**
+    .replace(/\*(.*?)\*/g, "$1")       // *italic*
+    .replace(/#{1,6}\s+/g, "")         // ## headers
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1") // [text](url) → text
+    .replace(/`([^`]*)`/g, "$1")       // `code`
+    .replace(/\s*-\s+/g, " ")          // - list items → space
+    .replace(/\s{2,}/g, " ")           // collapse whitespace
+    .trim();
+}
+
+/** Make cron titles friendlier: extract job name from "Cron: UUID — status" */
+function friendlyActivityTitle(event: ActivityEvent): string {
+  if (event.type !== "cron") return event.title;
+  // "Cron: UUID — finished" → try to extract a job name from source or detail
+  const match = event.title.match(/^Cron:\s*[\da-f-]+\s*—\s*(.+)$/i);
+  const statusText = match ? match[1] : event.title;
+  const jobName = event.source ?? "Cron job";
+  return match ? `${jobName} — ${statusText}` : event.title;
+}
+
 function ActivityCard({ event }: { event: ActivityEvent }) {
+  const [expanded, setExpanded] = useState(false);
+
   const statusColors: Record<string, string> = {
     ok: "border-l-emerald-500 bg-emerald-50/30 dark:bg-emerald-500/5",
     error: "border-l-red-500 bg-red-50/30 dark:bg-red-500/5",
@@ -272,13 +297,18 @@ function ActivityCard({ event }: { event: ActivityEvent }) {
 
   const Icon = typeIcons[event.type] ?? Activity;
   const colorClass = event.status ? statusColors[event.status] ?? "border-l-stone-300 dark:border-l-stone-600" : "border-l-stone-300 dark:border-l-stone-600";
+  const title = friendlyActivityTitle(event);
+  const cleanDetail = event.detail ? stripMarkdown(event.detail) : null;
 
   return (
-    <div className={cn("flex items-start gap-3 rounded-lg border-l-2 px-3.5 py-2.5", colorClass)}>
+    <button
+      onClick={() => setExpanded((v) => !v)}
+      className={cn("flex w-full items-start gap-3 rounded-lg border-l-2 px-3.5 py-2.5 text-left transition-colors hover:bg-stone-50 dark:hover:bg-stone-800/40", colorClass)}
+    >
       <Icon className="mt-0.5 h-4 w-4 shrink-0 text-stone-400 dark:text-stone-500" />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-stone-700 dark:text-stone-200">{event.title}</span>
+          <span className="text-sm font-medium text-stone-700 dark:text-stone-200">{title}</span>
           {event.status && (
             <span className={cn(
               "rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase",
@@ -294,11 +324,13 @@ function ActivityCard({ event }: { event: ActivityEvent }) {
             {timeAgo(new Date(event.timestamp).toISOString())}
           </span>
         </div>
-        {event.detail && (
-          <p className="mt-0.5 line-clamp-1 text-xs text-stone-500 dark:text-stone-400">{event.detail}</p>
+        {cleanDetail && (
+          <p className={cn("mt-0.5 text-xs text-stone-500 dark:text-stone-400", !expanded && "line-clamp-1")}>
+            {cleanDetail}
+          </p>
         )}
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -856,6 +888,7 @@ export function TimelineView() {
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [agentFilter, setAgentFilter] = useState<string>("all");
+  const [typeFilter, setTypeFilter] = useState<"all" | "session" | "cron">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -954,20 +987,24 @@ export function TimelineView() {
 
   const merged: TimelineItem[] = useMemo(() => {
     const items: TimelineItem[] = [];
-    for (const s of filtered) {
-      const ts = s.lastEventTs ? new Date(s.lastEventTs).getTime() : s.mtimeMs;
-      items.push({ kind: "session", data: s, sortTs: ts });
-    }
-    for (const a of activityEvents) {
-      if (agentFilter !== "all" && a.source && !a.source.toLowerCase().includes(agentFilter)) continue;
-      if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        if (!a.title.toLowerCase().includes(q) && !(a.detail ?? "").toLowerCase().includes(q)) continue;
+    if (typeFilter !== "cron") {
+      for (const s of filtered) {
+        const ts = s.lastEventTs ? new Date(s.lastEventTs).getTime() : s.mtimeMs;
+        items.push({ kind: "session", data: s, sortTs: ts });
       }
-      items.push({ kind: "activity", data: a, sortTs: a.timestamp });
+    }
+    if (typeFilter !== "session") {
+      for (const a of activityEvents) {
+        if (agentFilter !== "all" && a.source && !a.source.toLowerCase().includes(agentFilter)) continue;
+        if (searchQuery) {
+          const q = searchQuery.toLowerCase();
+          if (!a.title.toLowerCase().includes(q) && !(a.detail ?? "").toLowerCase().includes(q)) continue;
+        }
+        items.push({ kind: "activity", data: a, sortTs: a.timestamp });
+      }
     }
     return items.sort((a, b) => b.sortTs - a.sortTs);
-  }, [filtered, activityEvents, agentFilter, searchQuery]);
+  }, [filtered, activityEvents, agentFilter, searchQuery, typeFilter]);
 
   return (
     <SectionLayout>
@@ -1023,7 +1060,7 @@ export function TimelineView() {
                 <Search className="h-3.5 w-3.5 text-stone-400" />
                 <input
                   type="text"
-                  placeholder="Search sessions…"
+                  placeholder="Search…"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-44 bg-transparent text-xs text-stone-700 placeholder-stone-400 outline-none dark:text-stone-200"
@@ -1043,6 +1080,24 @@ export function TimelineView() {
                     </option>
                   ))}
                 </select>
+              </div>
+              {/* Type filter */}
+              <div className="flex items-center rounded-md border border-stone-200 dark:border-stone-700">
+                {(["all", "session", "cron"] as const).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setTypeFilter(t)}
+                    className={cn(
+                      "px-2.5 py-1 text-xs font-medium transition-colors",
+                      t !== "all" && "border-l border-stone-200 dark:border-stone-700",
+                      typeFilter === t
+                        ? "bg-stone-200 text-stone-800 dark:bg-stone-700 dark:text-stone-100"
+                        : "text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"
+                    )}
+                  >
+                    {t === "all" ? "All" : t === "session" ? "Sessions" : "Cron"}
+                  </button>
+                ))}
               </div>
               {/* Date range */}
               <div className="flex items-center gap-1.5">

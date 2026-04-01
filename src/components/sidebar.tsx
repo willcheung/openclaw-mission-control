@@ -47,7 +47,7 @@ const isAgentbayHosting = process.env.NEXT_PUBLIC_AGENTBAY_HOSTED === "true";
 const defaultNavItems: NavItem[] = [
   // ── Overview ──
   { group: "Overview", section: "dashboard", label: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
-  { section: "timeline", label: "Timeline", icon: ScrollText, href: "/timeline" },
+  { section: "timeline", label: "Activity Timeline", icon: ScrollText, href: "/timeline" },
   { section: "usage", label: "Usage", icon: BarChart3, href: "/usage" },
   // ── Agents ──
   { group: "Agents", section: "agents", label: "Agents", icon: Users, href: "/agents" },
